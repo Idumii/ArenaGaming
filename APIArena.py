@@ -1,15 +1,17 @@
 #Riot API Arena
 from typing import Final
+from dotenv import load_dotenv
 import os
 import discord
 from discord import app_commands
 import requests
 
+load_dotenv()
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
-key = ('RGAPI-db92ee73-346a-4561-9fdd-cf12fac0815e')
+key = os.getenv('API_RIOT_KEY')
 
 
 @client.event
@@ -149,8 +151,7 @@ async def invocateur(interaction: discord.Interaction, pseudo: str, tag: str):
 
 @tree.command(name='sync', description='Owner Only')
 async def sync(interaction: discord.Interaction):
-    with open('id.txt') as file:
-        idumi = file.read().strip()  # Suppression des espaces et des retours à la ligne éventuels
+    idumi = os.getenv('ID_IDUMI')
     
     owner_id = int(idumi)  # Assurez-vous que l'ID dans 'id.txt' est un entier et convertissez-le
     
@@ -167,8 +168,8 @@ async def sync(interaction: discord.Interaction):
         id = interaction.user.id
         await interaction.response.send_message(f'Seul le développeur peut utiliser cette commande -> {id} / {owner_id}')
 
-with open('token.txt') as file:
-    token = file.read()
+
+token = os.getenv('TOKEN_DISCORD')
 
 client.run(token=token)
 
