@@ -126,6 +126,13 @@ async def invocateur(interaction: discord.Interaction, pseudo: str, tag: str):
         embed.add_field(name='Score total de maitrise: ', value=summoner[5])
         
         embed.set_thumbnail(url=summoner[3])
+
+         # Ajout des informations de rang
+        for queue_type, rank_info in summonerRanks.items():
+            if queue_type == 'RANKED_SOLO_5x5':
+                embed.add_field(name='Solo/Duo', value=rank_info, inline=False)
+            elif queue_type == 'RANKED_FLEX_SR':
+                embed.add_field(name='Flex', value=rank_info, inline=False)
         
 
         await interaction.followup.send(embed=embed)
