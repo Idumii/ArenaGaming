@@ -64,7 +64,7 @@ async def requestSummoner(name, tag):
     summonerId = summoner_data.get('id')
     summonerTagline = account_data.get('tagLine')
     summonerGamename = account_data.get('gameName')
-    summonerLevel = "Lvl." + str(summoner_data['summonerLevel'])
+    summonerLevel = str(summoner_data['summonerLevel'])
     profileIcon = f'https://cdn.communitydragon.org/14.10.1/profile-icon/{summoner_data["profileIconId"]}'
 
     totalMastery_url = f'https://euw1.api.riotgames.com/lol/champion-mastery/v4/scores/by-puuid/{puuid}?api_key={key}'
@@ -82,6 +82,7 @@ def fetchRanks(summonerId):
         raise ValueError(f"Erreur lors de la récupération des rangs: {ranks_response.status_code} - {ranks_response.json().get('status', {}).get('message', '')}")
 
     ranks_data = ranks_response.json()
+    print(ranks_data)
     ranks = {}
     for entry in ranks_data:
         queue_type = entry['queueType']
@@ -206,7 +207,6 @@ except FileNotFoundError:
 def get_champion_name(champion_id):
     return champion_name_dict.get(champion_id, "Unknown Champion")   
 
-# Fonction pour récupérer les informations de la partie en cours
 def fetchGameOngoing(puuid):
     spectatorGame_url = f'https://euw1.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}?api_key={key}'
     spectatorGame_response = requests.get(spectatorGame_url)
@@ -218,6 +218,7 @@ def fetchGameOngoing(puuid):
     
     spectatorGame_data = spectatorGame_response.json()
     queueId = spectatorGame_data['gameQueueConfigId']
+    gameId = spectatorGame_data['gameId']
 
     game_modes = {
         420: 'Solo/Duo',
@@ -238,9 +239,9 @@ def fetchGameOngoing(puuid):
         if player['puuid'] == puuid:
             championGameId = player['championId']
             championName = get_champion_name(championGameId)
-            return player['riotId'], championName, gameMode
+            return player['riotId'], championName, gameMode, gameId
 
-    return None, None, None
+    return None, None, None, None
 
 # Dictionnaire pour suivre les invocateurs déjà signalés comme étant en jeu
 notified_summoners = {}
@@ -251,22 +252,26 @@ async def check_summoners_status():
     global notified_summoners
     for summoner in summoners_to_watch:
         try:
-            riot_id, champion_name, game_mode = fetchGameOngoing(summoner['puuid'])
+            riot_id, champion_name, game_mode, game_id = fetchGameOngoing(summoner['puuid'])
             if riot_id:
-                if summoner['puuid'] not in notified_summoners:
+                if summoner['puuid'] not in notified_summoners or notified_summoners[summoner['puuid']]['game_id'] != game_id:
                     channel = discord.utils.get(client.get_all_channels(), name='test')
                     if channel:
-                        summonerInGame = fetchGameOngoing(puuid=summoner['puuid'])
                         encoded_name = urllib.parse.quote(summoner['name'])
                         encoded_tag = urllib.parse.quote(summoner['tag'])
                         url = f"https://porofessor.gg/fr/live/euw/{encoded_name}%20-{encoded_tag}"
                         link_text = f"**[En jeu]({url})**"
                         embed = discord.Embed(
-                            description=f"{link_text}\n\n{summoner['name']} est en **{summonerInGame[2]}**. Il joue **{summonerInGame[1]}**",
+                            description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
                             color=discord.Colour.yellow()
                         )
                         await channel.send(embed=embed)
-                    notified_summoners[summoner['puuid']] = (riot_id, champion_name, game_mode)
+                    notified_summoners[summoner['puuid']] = {
+                        'riot_id': riot_id,
+                        'champion_name': champion_name,
+                        'game_mode': game_mode,
+                        'game_id': game_id
+                    }
             else:
                 if summoner['puuid'] in notified_summoners:
                     del notified_summoners[summoner['puuid']]
