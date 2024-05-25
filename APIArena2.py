@@ -274,9 +274,28 @@ async def check_summoners_status():
                     }
             else:
                 if summoner['puuid'] in notified_summoners:
+                    game_id = notified_summoners[summoner['puuid']]['game_id']
+                    game_result = fetchGameResult(game_id, summoner['puuid'])
+                    if game_result:
+                        channel = discord.utils.get(client.get_all_channels(), name='test')
+                        if channel:
+                            embed = discord.Embed(
+                                title=f"Résultat de la partie terminée",
+                                description=f"{summoner['name']} a terminé une partie.\n\n"
+                                            f"**Résultat:** {game_result['result']}\n"
+                                            f"**Champion:** {game_result['champion']}\n"
+                                            f"**Score:** {game_result['score']}\n"
+                                            f"**CS:** {game_result['cs']}\n"
+                                            f"**Poste:** {game_result['poste']}\n"
+                                            f"**Vision Score:** {game_result['visionScore']}\n"
+                                            f"**Côté:** {game_result['side']}",
+                                color=discord.Colour.green() if game_result['result'] == 'Victoire' else discord.Colour.red()
+                            )
+                            await channel.send(embed=embed)
                     del notified_summoners[summoner['puuid']]
         except Exception as e:
             print(f"Erreur de vérification pour {summoner['name']}: {e}")
+
 
 def generate_simple_id():
     return len(summoners_to_watch) + 1
@@ -345,6 +364,53 @@ async def maitrises(interaction: discord.Interaction, pseudo: str, tag: str):
     except Exception as e:
         await interaction.response.send_message("Une erreur inattendue est survenue.", ephemeral=True)
         print(f"Unexpected error: {e}")
+
+
+###Résultat Game###
+def fetchGameResult(gameId, puuid):
+    match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
+    match_response = requests.get(match_url)
+    match_data = match_response.json()
+
+    players = match_data['info']['participants']
+
+    for player in players:
+        if player['puuid'] == puuid:
+            print(player)
+            gameResult = 'Victoire' if player['win'] else 'Défaite'
+
+            score = f"{player['kills']}/{player['deaths']}/{player['assists']}"
+            cs = (
+                player['neutralMinionsKilled'] + 
+                player['totalMinionsKilled'] + 
+                player['totalAllyJungleMinionsKilled'] + 
+                player['totalEnemyJungleMinionsKilled'] + 
+                player['dragonKills'] + 
+                player['baronKills'] + 
+                player['wardsKilled']
+            )
+            champion = player['championName']
+            poste = player['lane']
+            visionScore = player['visionScore']
+            side = 'Blue' if player['teamId'] == 100 else 'Red'
+
+            return {
+                'result': gameResult,
+                'score': score,
+                'cs': cs,
+                'champion': champion,
+                'poste': poste,
+                'visionScore': visionScore,
+                'side': side
+            }
+
+    return None
+            
+           
+            
+
+
+
 
 # Commande de synchronisation
 @tree.command(name='sync', description='Owner Only')
