@@ -73,6 +73,7 @@ async def requestSummoner(name, tag):
 
     return summonerTagline, summonerGamename, summonerLevel, profileIcon, summonerId, totalMastery_data, puuid
 
+
 def fetchRanks(summonerId):
     ranks_url = f'https://euw1.api.riotgames.com/lol/league/v4/entries/by-summoner/{summonerId}?api_key={key}'
     ranks_response = requests.get(ranks_url)
@@ -101,13 +102,14 @@ async def invocateur(interaction: discord.Interaction, pseudo: str, tag: str):
     try:
         print('Invocateur trouvé')
         summoner = await requestSummoner(pseudo, tag)
-        summonerRanks = fetchRanks(summonerId=summoner[1])
+        print(f"Summoner ID: {summoner[4]}, PUUID: {summoner[6]}")  # Debugging
+        summonerRanks = fetchRanks(summonerId=summoner[4])
         embed = discord.Embed(
-            title=f"{summoner[0]} #{tag}",
-            description=f"Niveau: {summoner[3]}",
+            title=f"{summoner[1]} #{tag}",
+            description=f"Niveau: {summoner[2]}",
             color=discord.Colour.gold()
         )
-        embed.set_thumbnail(url=f"http://ddragon.leagueoflegends.com/cdn/12.10.1/img/profileicon/{summoner[2]}.png")
+        embed.set_thumbnail(url=summoner[3])
 
         print("Summoner Ranks:", summonerRanks)  # Ajouter cette ligne pour déboguer
 
