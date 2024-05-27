@@ -1,18 +1,27 @@
 import discord
-from discord import app_commands
 from discord.ext import tasks
+from discord import app_commands
+import os
 import requests
 import json
-import os
+import uuid
 import urllib.parse
 from dotenv import load_dotenv
 
+# Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
+
+key = os.getenv("API_RIOT_KEY")
+token = os.getenv("TOKEN_DISCORD")
+
+if not key or not token:
+    raise ValueError("API_RIOT_KEY or TOKEN_DISCORD environment variables are not set properly")
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
-key = os.getenv('API_RIOT_KEY')
+
+    
 
 # Charger la liste des invocateurs à surveiller à partir d'un fichier JSON
 try:
@@ -21,21 +30,12 @@ try:
 except FileNotFoundError:
     summoners_to_watch = []
 
-@client.event
-async def on_ready():
-    print("Bot en ligne")
-    try:
-        await tree.sync()
-    except Exception as e:
-        print(e)
-    check_summoners_status.start()
 
-def clearGamename(gamenameWithspaces):
-    result = ""
-    for n in gamenameWithspaces:
-        result = result + " " + str(n)
-    return result
+# Fonction pour générer un identifiant simple
+def generate_simple_id():
+    return max([s['id'] for s in summoners_to_watch], default=0) + 1
 
+# Fonction pour demander les informations de l'invocateur
 async def requestSummoner(name, tag):
     account_url = f'https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{name}/{tag}?api_key={key}'
     account_response = requests.get(account_url)
@@ -64,7 +64,7 @@ async def requestSummoner(name, tag):
     summonerId = summoner_data.get('id')
     summonerTagline = account_data.get('tagLine')
     summonerGamename = account_data.get('gameName')
-    summonerLevel = str(summoner_data['summonerLevel'])
+    summonerLevel = "Lvl." + str(summoner_data['summonerLevel'])
     profileIcon = f'https://cdn.communitydragon.org/14.10.1/profile-icon/{summoner_data["profileIconId"]}'
 
     totalMastery_url = f'https://euw1.api.riotgames.com/lol/champion-mastery/v4/scores/by-puuid/{puuid}?api_key={key}'
@@ -73,6 +73,12 @@ async def requestSummoner(name, tag):
 
     return summonerTagline, summonerGamename, summonerLevel, profileIcon, summonerId, totalMastery_data, puuid
 
+
+def clearGamename(gamenameWithspaces):
+    result = ""
+    for n in gamenameWithspaces:
+        result = result + " " + str(n)
+    return result
 
 def fetchRanks(summonerId):
     ranks_url = f'https://euw1.api.riotgames.com/lol/league/v4/entries/by-summoner/{summonerId}?api_key={key}'
@@ -193,20 +199,23 @@ async def maitrises(interaction: discord.Interaction, pseudo: str, tag: str, cou
         await interaction.followup.send("Une erreur inattendue est survenue.")
         print(f"Unexpected error: {e}")
 
-###Game en cours###
-# Charger les invocateurs suivis depuis un fichier JSON
-try:
-    with open('champion.json', 'r', encoding='utf-8') as f:
-        champion_data = json.load(f)
 
-    champion_name_dict = {int(info['key']): info['name'] for info in champion_data['data'].values()}
-except FileNotFoundError:
-    champion_name_dict = {}
+summoners_to_watch = []
+notified_summoners = {}
+notified_games = {}
+
+# Charger le fichier JSON local
+with open('champion.json', 'r', encoding='utf-8') as f:
+    champion_data = json.load(f)
+
+# Créer un dictionnaire pour accéder rapidement aux informations des champions par leur ID
+champion_name_dict = {int(info['key']): info['name'] for info in champion_data['data'].values()}
 
 # Fonction pour obtenir le nom du champion par ID
 def get_champion_name(champion_id):
-    return champion_name_dict.get(champion_id, "Unknown Champion")   
+    return champion_name_dict.get(champion_id, "Unknown Champion")
 
+# Fonction pour récupérer les informations de la partie en cours
 def fetchGameOngoing(puuid):
     spectatorGame_url = f'https://euw1.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}?api_key={key}'
     spectatorGame_response = requests.get(spectatorGame_url)
@@ -239,73 +248,46 @@ def fetchGameOngoing(puuid):
         if player['puuid'] == puuid:
             championGameId = player['championId']
             championName = get_champion_name(championGameId)
-            championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/square'
+            championIcon = f'https://cdn.communitydragon.org/latest/champion/{championGameId}/square'
             return player['riotId'], championName, gameMode, gameId, championIcon
 
-    return None, None, None, None
+    return None, None, None, None, None
 
-
-# Dictionnaire pour suivre les invocateurs déjà signalés comme étant en jeu
-notified_summoners = {}
-
-
-
-def generate_simple_id():
-    return len(summoners_to_watch) + 1
-
-###Résultat Game###
+# Fonction pour récupérer les résultats d'une partie terminée
 def fetchGameResult(gameId, puuid):
     match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
     match_response = requests.get(match_url)
     match_data = match_response.json()
 
-    print(f"Fetched game result for gameId: {gameId}, puuid: {puuid}")
+    if 'info' not in match_data:
+        print(f"No 'info' in match data for gameId: {gameId}")
+        return None, None, None
 
     players = match_data['info']['participants']
 
     for player in players:
         if player['puuid'] == puuid:
             gameResult = 'Victoire' if player['win'] else 'Défaite'
-
             score = f"{player['kills']}/{player['deaths']}/{player['assists']}"
-            cs = (
-                player['neutralMinionsKilled'] + 
-                player['totalMinionsKilled'] + 
-                player['totalAllyJungleMinionsKilled'] + 
-                player['totalEnemyJungleMinionsKilled'] + 
-                player['dragonKills'] + 
-                player['baronKills'] + 
-                player['wardsKilled']
-            )
+            cs = player['neutralMinionsKilled'] + player['totalMinionsKilled'] + player['totalAllyJungleMinionsKilled'] + player['totalEnemyJungleMinionsKilled'] + player['dragonKills'] + player['baronKills'] + player['wardsKilled']
             champion = player['championName']
             poste = player['lane']
             visionScore = player['visionScore']
             side = 'Blue' if player['teamId'] == 100 else 'Red'
+            return gameResult, score, cs, champion, poste, visionScore, side
 
-            print(f"Game result found: {gameResult}, {champion}, {score}, {cs}, {poste}, {visionScore}, {side}")
+    return None, None, None, None
 
-            return {
-                'result': gameResult,
-                'score': score,
-                'cs': cs,
-                'champion': champion,
-                'poste': poste,
-                'visionScore': visionScore,
-                'side': side
-            }
-
-    return None
-
-
-
+# Tâche de fond pour vérifier l'état des invocateurs
 @tasks.loop(minutes=1)
 async def check_summoners_status():
+    print("Loop invocateur en game a check")
     global notified_summoners
     for summoner in summoners_to_watch:
         try:
-            riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(summoner['puuid'])
+            riot_id, champion_name, game_mode, game_id = fetchGameOngoing(summoner['puuid'])
             if riot_id:
-                if summoner['puuid'] not in notified_summoners or notified_summoners[summoner['puuid']]['game_id'] != game_id:
+                if summoner['puuid'] not in notified_summoners or notified_summoners[summoner['puuid']] != game_id:
                     channel = discord.utils.get(client.get_all_channels(), name='test')
                     if channel:
                         encoded_name = urllib.parse.quote(summoner['name'])
@@ -316,40 +298,53 @@ async def check_summoners_status():
                             description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
                             color=discord.Colour.yellow()
                         )
-                        embed.set_thumbnail(url=champion_icon)
+                        embed.set_thumbnail(url=f"https://cdn.communitydragon.org/latest/champion/{champion_name}/square")
                         await channel.send(embed=embed)
-                    notified_summoners[summoner['puuid']] = {
-                        'riot_id': riot_id,
-                        'champion_name': champion_name,
-                        'game_mode': game_mode,
-                        'game_id': game_id
-                    }
+                    notified_summoners[summoner['puuid']] = game_id
                     print(f"Added {summoner['name']} to notified_summoners with gameId: {game_id}")
             else:
                 if summoner['puuid'] in notified_summoners:
-                    game_id = notified_summoners[summoner['puuid']]['game_id']
-                    game_result = fetchGameResult(game_id, summoner['puuid'])
-                    if game_result:
-                        channel = discord.utils.get(client.get_all_channels(), name='test')
-                        if channel:
-                            embed = discord.Embed(
-                                title=f"Résultat de la partie terminée",
-                                description=f"{summoner['name']} a terminé une partie.\n\n"
-                                            f"**Résultat:** {game_result['result']}\n"
-                                            f"**Champion:** {game_result['champion']}\n"
-                                            f"**Score:** {game_result['score']}\n"
-                                            f"**CS:** {game_result['cs']}\n"
-                                            f"**Poste:** {game_result['poste']}\n"
-                                            f"**Vision Score:** {game_result['visionScore']}\n"
-                                            f"**Côté:** {game_result['side']}",
-                                color=discord.Colour.green() if game_result['result'] == 'Victoire' else discord.Colour.red()
-                            )
-                            await channel.send(embed=embed)
-                    print(f"Removed {summoner['name']} from notified_summoners with gameId: {game_id}")
                     del notified_summoners[summoner['puuid']]
         except Exception as e:
             print(f"Erreur de vérification pour {summoner['name']}: {e}")
 
+# Tâche de fond pour vérifier les parties terminées
+@tasks.loop(minutes=1)
+async def check_finished_games():
+    print("Loop game a check")
+    global notified_summoners, notified_games
+    for summoner in summoners_to_watch:
+        puuid = summoner['puuid']
+        if puuid in notified_summoners:
+            game_id = notified_summoners[puuid]
+            if game_id not in notified_games:
+                try:
+                    game_result, score, cs, champion, poste, vision_score, side = fetchGameResult(game_id, puuid)
+                    if game_result:
+                        channel = discord.utils.get(client.get_all_channels(), name='test')
+                        if channel:
+                            embed = discord.Embed(
+                                title=f"Partie terminée pour {summoner['name']}",
+                                description=f"Résultat: **{game_result}**\nScore: **{score}**\nCS: **{cs}**\nChampion: **{champion}**\nPoste: **{poste}**\nVision Score: **{vision_score}**\nSide: **{side}**",
+                                color=discord.Colour.red() if game_result == 'Défaite' else discord.Colour.green()
+                            )
+                            embed.set_thumbnail(url=f"https://cdn.communitydragon.org/latest/champion/{champion}/square")
+                            await channel.send(embed=embed)
+                        notified_games[game_id] = True
+                        del notified_summoners[puuid]
+                except Exception as e:
+                    print(f"Erreur lors de la récupération des résultats pour le jeu {game_id}: {e}")
+
+
+# Charger les invocateurs à surveiller depuis un fichier
+def load_summoners_to_watch():
+    global summoners_to_watch
+    try:
+        with open('summoners_to_watch.json', 'r', encoding='utf-8') as f:
+            summoners_to_watch = json.load(f)
+        print("Summoners to watch loaded successfully.")
+    except Exception as e:
+        print(f"Failed to load summoners to watch: {e}")
 
 # Commande pour ajouter un invocateur à la liste
 @tree.command(name='addsummoner', description='Ajouter un invocateur à la liste pour être notifié quand celui-ci est en game')
@@ -357,7 +352,7 @@ async def check_summoners_status():
 async def addsummoner(interaction: discord.Interaction, pseudo: str, tag: str):
     try:
         summoner = await requestSummoner(pseudo, tag)
-        summoner_id = generate_simple_id()
+        summoner_id = len(summoners_to_watch) + 1  # Utiliser un ID numérique simple
         summoners_to_watch.append({'id': summoner_id, 'name': summoner[1], 'tag': tag, 'puuid': summoner[6]})
         with open('summoners_to_watch.json', 'w', encoding='utf-8') as f:
             json.dump(summoners_to_watch, f, ensure_ascii=False, indent=4)
@@ -381,6 +376,8 @@ async def removesummoner(interaction: discord.Interaction, summoner_id: int):
     else:
         await interaction.response.send_message(f"Aucun invocateur trouvé avec l'ID {summoner_id}.")
 
+
+
 # Commande pour afficher la liste des invocateurs suivis
 @tree.command(name='listsummoners', description='Afficher la liste des invocateurs suivis')
 async def listsummoners(interaction: discord.Interaction):
@@ -398,46 +395,37 @@ async def listsummoners(interaction: discord.Interaction):
 # Commande discord Game en cours
 @tree.command(name='ingame', description='Savoir si un joueur est en jeu')
 @app_commands.describe(pseudo='Nom invocateur', tag='EUW')
-async def maitrises(interaction: discord.Interaction, pseudo: str, tag: str):
+async def ingame(interaction: discord.Interaction, pseudo: str, tag: str):
     try:
         summoner = await requestSummoner(pseudo, tag)
         summonerInGame = fetchGameOngoing(puuid=summoner[6])
 
+        encoded_name = urllib.parse.quote(summoner[1])
+        encoded_tag = urllib.parse.quote(summoner[0])
+        url = f"https://porofessor.gg/fr/live/euw/{encoded_name}%20-{encoded_tag}"
+        link_text = f"**[En jeu]({url})**"
+
         embed = discord.Embed(
-            title=f"{summonerInGame[0]} est en {summonerInGame[2]}",
-            description=f"Il joue {summonerInGame[1]}",
+            description=f"{link_text}\n\n{summoner[1]} est en **{summonerInGame[2]}**. Il joue **{summonerInGame[1]}**",
             color=discord.Colour.blue()
         )
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed)  # Envoyer la réponse sans différer
 
     except ValueError as e:
         await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message("Une erreur inattendue est survenue.", ephemeral=True)
+        # Enregistrement de l'erreur pour le débogage
         print(f"Unexpected error: {e}")
 
+# Charger les invocateurs à surveiller au démarrage
+load_summoners_to_watch()
 
+@client.event
+async def on_ready():
+    await tree.sync()
+    check_summoners_status.start()
+    check_finished_games.start()
+    print("Bot en ligne")
 
-            
-
-
-# Commande de synchronisation
-@tree.command(name='sync', description='Owner Only')
-async def sync(interaction: discord.Interaction):
-    idumi = os.getenv('ID_IDUMI')
-    owner_id = int(idumi)
-    if interaction.user.id == owner_id:
-        await interaction.response.send_message('Synchronization in progress...')
-        try:
-            await tree.sync()
-            await interaction.followup.send('Command tree synced')
-            print('Command tree synced')
-        except Exception as e:
-            await interaction.followup.send(f'Failed to sync commands: {e}')
-            print(f'Failed to sync commands: {e}')
-    else:
-        id = interaction.user.id
-        await interaction.response.send_message(f'Seul le développeur peut utiliser cette commande -> {id} / {owner_id}')
-
-token = os.getenv("TOKEN_DISCORD")
-client.run(token=token)
+client.run(token)
