@@ -239,20 +239,71 @@ def fetchGameOngoing(puuid):
         if player['puuid'] == puuid:
             championGameId = player['championId']
             championName = get_champion_name(championGameId)
-            return player['riotId'], championName, gameMode, gameId
+            championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/square'
+            return player['riotId'], championName, gameMode, gameId, championIcon
 
     return None, None, None, None
+
 
 # Dictionnaire pour suivre les invocateurs déjà signalés comme étant en jeu
 notified_summoners = {}
 
-# Tâche de fond pour vérifier l'état des invocateurs
+
+
+def generate_simple_id():
+    return len(summoners_to_watch) + 1
+
+###Résultat Game###
+def fetchGameResult(gameId, puuid):
+    match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
+    match_response = requests.get(match_url)
+    match_data = match_response.json()
+
+    print(f"Fetched game result for gameId: {gameId}, puuid: {puuid}")
+
+    players = match_data['info']['participants']
+
+    for player in players:
+        if player['puuid'] == puuid:
+            gameResult = 'Victoire' if player['win'] else 'Défaite'
+
+            score = f"{player['kills']}/{player['deaths']}/{player['assists']}"
+            cs = (
+                player['neutralMinionsKilled'] + 
+                player['totalMinionsKilled'] + 
+                player['totalAllyJungleMinionsKilled'] + 
+                player['totalEnemyJungleMinionsKilled'] + 
+                player['dragonKills'] + 
+                player['baronKills'] + 
+                player['wardsKilled']
+            )
+            champion = player['championName']
+            poste = player['lane']
+            visionScore = player['visionScore']
+            side = 'Blue' if player['teamId'] == 100 else 'Red'
+
+            print(f"Game result found: {gameResult}, {champion}, {score}, {cs}, {poste}, {visionScore}, {side}")
+
+            return {
+                'result': gameResult,
+                'score': score,
+                'cs': cs,
+                'champion': champion,
+                'poste': poste,
+                'visionScore': visionScore,
+                'side': side
+            }
+
+    return None
+
+
+
 @tasks.loop(minutes=1)
 async def check_summoners_status():
     global notified_summoners
     for summoner in summoners_to_watch:
         try:
-            riot_id, champion_name, game_mode, game_id = fetchGameOngoing(summoner['puuid'])
+            riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(summoner['puuid'])
             if riot_id:
                 if summoner['puuid'] not in notified_summoners or notified_summoners[summoner['puuid']]['game_id'] != game_id:
                     channel = discord.utils.get(client.get_all_channels(), name='test')
@@ -265,6 +316,7 @@ async def check_summoners_status():
                             description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
                             color=discord.Colour.yellow()
                         )
+                        embed.set_thumbnail(url=champion_icon)
                         await channel.send(embed=embed)
                     notified_summoners[summoner['puuid']] = {
                         'riot_id': riot_id,
@@ -272,6 +324,7 @@ async def check_summoners_status():
                         'game_mode': game_mode,
                         'game_id': game_id
                     }
+                    print(f"Added {summoner['name']} to notified_summoners with gameId: {game_id}")
             else:
                 if summoner['puuid'] in notified_summoners:
                     game_id = notified_summoners[summoner['puuid']]['game_id']
@@ -292,13 +345,11 @@ async def check_summoners_status():
                                 color=discord.Colour.green() if game_result['result'] == 'Victoire' else discord.Colour.red()
                             )
                             await channel.send(embed=embed)
+                    print(f"Removed {summoner['name']} from notified_summoners with gameId: {game_id}")
                     del notified_summoners[summoner['puuid']]
         except Exception as e:
             print(f"Erreur de vérification pour {summoner['name']}: {e}")
 
-
-def generate_simple_id():
-    return len(summoners_to_watch) + 1
 
 # Commande pour ajouter un invocateur à la liste
 @tree.command(name='addsummoner', description='Ajouter un invocateur à la liste pour être notifié quand celui-ci est en game')
@@ -366,50 +417,8 @@ async def maitrises(interaction: discord.Interaction, pseudo: str, tag: str):
         print(f"Unexpected error: {e}")
 
 
-###Résultat Game###
-def fetchGameResult(gameId, puuid):
-    match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
-    match_response = requests.get(match_url)
-    match_data = match_response.json()
 
-    players = match_data['info']['participants']
-
-    for player in players:
-        if player['puuid'] == puuid:
-            print(player)
-            gameResult = 'Victoire' if player['win'] else 'Défaite'
-
-            score = f"{player['kills']}/{player['deaths']}/{player['assists']}"
-            cs = (
-                player['neutralMinionsKilled'] + 
-                player['totalMinionsKilled'] + 
-                player['totalAllyJungleMinionsKilled'] + 
-                player['totalEnemyJungleMinionsKilled'] + 
-                player['dragonKills'] + 
-                player['baronKills'] + 
-                player['wardsKilled']
-            )
-            champion = player['championName']
-            poste = player['lane']
-            visionScore = player['visionScore']
-            side = 'Blue' if player['teamId'] == 100 else 'Red'
-
-            return {
-                'result': gameResult,
-                'score': score,
-                'cs': cs,
-                'champion': champion,
-                'poste': poste,
-                'visionScore': visionScore,
-                'side': side
-            }
-
-    return None
             
-           
-            
-
-
 
 
 # Commande de synchronisation
