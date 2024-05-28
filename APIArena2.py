@@ -238,6 +238,7 @@ def fetchGameOngoing(puuid):
         1900: 'URF',
         1700: 'Arena',
         400: 'Normal',
+        490: 'Normal',
         0: 'Perso'
     }
     gameMode = game_modes.get(queueId, f'Mode non référencé: {queueId}')
@@ -253,39 +254,38 @@ def fetchGameOngoing(puuid):
 
     return None, None, None, None, None
 
-# Fonction pour récupérer les résultats d'une partie terminée
+# Fonction pour récupérer les résultats de la partie
 def fetchGameResult(gameId, puuid):
     match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
     match_response = requests.get(match_url)
     match_data = match_response.json()
-
+    
     if 'info' not in match_data:
-        print(f"No 'info' in match data for gameId: {gameId}")
-        return None, None, None
-
+        raise ValueError(f"Erreur lors de la récupération des résultats de la partie: {match_data.get('status', {}).get('message', 'Unknown error')}")
+    
     players = match_data['info']['participants']
 
     for player in players:
         if player['puuid'] == puuid:
             gameResult = 'Victoire' if player['win'] else 'Défaite'
             score = f"{player['kills']}/{player['deaths']}/{player['assists']}"
-            cs = player['neutralMinionsKilled'] + player['totalMinionsKilled'] + player['totalAllyJungleMinionsKilled'] + player['totalEnemyJungleMinionsKilled'] + player['dragonKills'] + player['baronKills'] + player['wardsKilled']
+            cs = (player['totalMinionsKilled'] + player['neutralMinionsKilled'] + 
+                  player['totalAllyJungleMinionsKilled'] + player['totalEnemyJungleMinionsKilled'])
             champion = player['championName']
             poste = player['lane']
             visionScore = player['visionScore']
-            side = 'Blue' if player['teamId'] == 100 else 'Red'
+            side = 'Bleu' if player['teamId'] == 100 else 'Rouge'
             return gameResult, score, cs, champion, poste, visionScore, side
 
-    return None, None, None, None
+    return None, None, None, None, None, None, None
 
-# Tâche de fond pour vérifier l'état des invocateurs
+
 @tasks.loop(minutes=1)
 async def check_summoners_status():
-    print("Loop invocateur en game a check")
     global notified_summoners
     for summoner in summoners_to_watch:
         try:
-            riot_id, champion_name, game_mode, game_id = fetchGameOngoing(summoner['puuid'])
+            riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(summoner['puuid'])
             if riot_id:
                 if summoner['puuid'] not in notified_summoners or notified_summoners[summoner['puuid']] != game_id:
                     channel = discord.utils.get(client.get_all_channels(), name='test')
@@ -298,7 +298,7 @@ async def check_summoners_status():
                             description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
                             color=discord.Colour.yellow()
                         )
-                        embed.set_thumbnail(url=f"https://cdn.communitydragon.org/latest/champion/{champion_name}/square")
+                        embed.set_thumbnail(url=champion_icon)
                         await channel.send(embed=embed)
                     notified_summoners[summoner['puuid']] = game_id
                     print(f"Added {summoner['name']} to notified_summoners with gameId: {game_id}")
@@ -308,32 +308,38 @@ async def check_summoners_status():
         except Exception as e:
             print(f"Erreur de vérification pour {summoner['name']}: {e}")
 
-# Tâche de fond pour vérifier les parties terminées
-@tasks.loop(minutes=1)
+@tasks.loop(minutes=2)
 async def check_finished_games():
-    print("Loop game a check")
-    global notified_summoners, notified_games
-    for summoner in summoners_to_watch:
-        puuid = summoner['puuid']
-        if puuid in notified_summoners:
-            game_id = notified_summoners[puuid]
-            if game_id not in notified_games:
-                try:
-                    game_result, score, cs, champion, poste, vision_score, side = fetchGameResult(game_id, puuid)
-                    if game_result:
-                        channel = discord.utils.get(client.get_all_channels(), name='test')
-                        if channel:
-                            embed = discord.Embed(
-                                title=f"Partie terminée pour {summoner['name']}",
-                                description=f"Résultat: **{game_result}**\nScore: **{score}**\nCS: **{cs}**\nChampion: **{champion}**\nPoste: **{poste}**\nVision Score: **{vision_score}**\nSide: **{side}**",
-                                color=discord.Colour.red() if game_result == 'Défaite' else discord.Colour.green()
-                            )
-                            embed.set_thumbnail(url=f"https://cdn.communitydragon.org/latest/champion/{champion}/square")
-                            await channel.send(embed=embed)
-                        notified_games[game_id] = True
-                        del notified_summoners[puuid]
-                except Exception as e:
-                    print(f"Erreur lors de la récupération des résultats pour le jeu {game_id}: {e}")
+    global notified_summoners
+    for puuid, game_id in list(notified_summoners.items()):
+        try:
+            game_result = fetchGameResult(game_id, puuid)
+            if game_result:
+                channel = discord.utils.get(client.get_all_channels(), name='test')
+                gameResult, score, cs, champion, poste, visionScore, side = game_result
+                if channel:
+                    summoner_name = next((s['name'] for s in summoners_to_watch if s['puuid'] == puuid), "Unknown")
+                    embed = discord.Embed(
+                        title=f"Partie terminée pour {summoner_name}",
+                        description=(
+                            f"**Résultat:** {gameResult}\n"
+                            f"**Score:** {score}\n"
+                            f"**CS:** {cs}\n"
+                            f"**Champion:** {champion}\n"
+                            f"**Poste:** {poste}\n"
+                            f"**Vision Score:** {visionScore}\n"
+                            f"**Side:** {side}"
+                        ),
+                        color=discord.Colour.green() if gameResult == 'Victoire' else discord.Colour.red()
+                    )
+                    embed.set_thumbnail(url=f'https://cdn.communitydragon.org/latest/champion/{champion}/square')
+                    await channel.send(embed=embed)
+                del notified_summoners[puuid]
+                print(f"Removed {puuid} from notified_summoners after gameId: {game_id}")
+        except ValueError as e:
+            print(f"Erreur lors de la récupération de la partie: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
 
 
 # Charger les invocateurs à surveiller depuis un fichier
