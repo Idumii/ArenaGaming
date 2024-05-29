@@ -1,29 +1,28 @@
+# main.py
 import discord
-from discord.ext import tasks
+from discord.ext import tasks, commands
 from discord import app_commands
 from dotenv import load_dotenv
 import os
 from commands import setup_commands
 from data_manager import load_summoners_to_watch, summoners_to_watch, notified_summoners, notified_games
-from riot_api import fetchGameOngoing, fetchGameResult
+from riot_api import fetchGameOngoing, fetchGameResult, key
 import urllib.parse
-
 
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
-load_summoners_to_watch()
-token = os.getenv("TOKEN_DISCORD")
+load_summoners_to_watch()  # Charger les invocateurs au démarrage
+
+token = os.getenv('TOKEN_DISCORD')
+
+if not token:
+    raise ValueError("TOKEN_DISCORD n'est pas bien défini")
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-if not token:
-    raise ValueError("TOKEN_DISCORD n'est pas bien définit")
-
-
 ### Loops ###
-#Verifie toutes les minutes si un invocateur de la liste est en jeu
 @tasks.loop(minutes=1)
 async def check_summoners_status():
     global notified_summoners
@@ -52,29 +51,52 @@ async def check_summoners_status():
         except Exception as e:
             print(f"Erreur de vérification pour {summoner['name']}: {e}")
 
-#Vérifie toutes les 2 minutes si un invocateur de la liste a finit une partie que l'on a annoncée
 @tasks.loop(minutes=2)
 async def check_finished_games():
     global notified_summoners
     for puuid, game_id in list(notified_summoners.items()):
         try:
-            game_result = fetchGameResult(game_id, puuid)
+            game_result = fetchGameResult(game_id, puuid, key)
             if game_result:
                 channel = discord.utils.get(client.get_all_channels(), name='test')
-                gameResult, score, cs, champion, poste, visionScore, side = game_result
+                (gameResult, score, cs, champion, poste, visionScore, side, 
+                 totalDamages, totalDamagesMinutes, pentakills, quadrakills, 
+                 tripleKills, doubleKills, firstBloodKill, firstTowerKill, 
+                 gameDurationMinutes) = game_result
                 if channel:
                     summoner_name = next((s['name'] for s in summoners_to_watch if s['puuid'] == puuid), "Unknown")
+                    
+                    description = (
+                        f"**Résultat:** {gameResult}\n"
+                        f"**Durée:** {gameDurationMinutes} minutes\n"
+                        f"**Side:** {side}\n"
+                        f"**Champion:** {champion}\n"
+                        f"**Poste:** {poste}\n"
+                        f"**Score:** {score}\n"
+                        f"**CS:** {cs}\n"
+                        f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min\n"
+                    )
+
+                    # Ajouter les informations supplémentaires si elles ne sont pas nulles
+                    if pentakills > 0:
+                        description += f"**Pentakill:** {pentakills}\n"
+                    if quadrakills > 0:
+                        description += f"**Quadrakill:** {quadrakills}\n"
+                    if tripleKills > 0:
+                        description += f"**Triple Kill:** {tripleKills}\n"
+                    if doubleKills > 0:
+                        description += f"**Double Kill:** {doubleKills}\n"
+                    if firstBloodKill:
+                        description += f"**Premier Sang:** {firstBloodKill}\n"
+                    if firstTowerKill:
+                        description += f"**Première Tourelle:** {firstTowerKill}\n"
+                        
+                    description += f"**Score de vision:** {visionScore}\n"    
+                    
+                    # Créer et envoyer l'embed
                     embed = discord.Embed(
                         title=f"Partie terminée pour {summoner_name}",
-                        description=(
-                            f"**Résultat:** {gameResult}\n"
-                            f"**Score:** {score}\n"
-                            f"**CS:** {cs}\n"
-                            f"**Champion:** {champion}\n"
-                            f"**Poste:** {poste}\n"
-                            f"**Vision Score:** {visionScore}\n"
-                            f"**Side:** {side}"
-                        ),
+                        description=description,
                         color=discord.Colour.green() if gameResult == 'Victoire' else discord.Colour.red()
                     )
                     embed.set_thumbnail(url=f'https://cdn.communitydragon.org/latest/champion/{champion}/square')
@@ -86,15 +108,12 @@ async def check_finished_games():
         except Exception as e:
             print(f"Unexpected error: {e}")
 
-
-
-
 @client.event
 async def on_ready():
     await tree.sync()
+    print(f"Logged in as {client.user}")
     check_summoners_status.start()
     check_finished_games.start()
-    print("Bot en ligne")
 
 # Initialiser les commandes
 setup_commands(client, tree)

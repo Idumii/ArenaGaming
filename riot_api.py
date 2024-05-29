@@ -94,7 +94,8 @@ def fetchMasteries(puuid, count=1):
     masteries = []
     for mastery in bestMasteries_data:
         championID = mastery['championId']
-        championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championID}/square'
+        #championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championID}/square'
+        championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championID}/tile'
         championName = get_champion_name(championID)
         championLevel = mastery['championLevel']
         championPoints = mastery['championPoints']
@@ -136,32 +137,53 @@ def fetchGameOngoing(puuid):
         if player['puuid'] == puuid:
             championGameId = player['championId']
             championName = data_manager.get_champion_name(champion_id=championGameId)
-            championIcon = f'https://cdn.communitydragon.org/latest/champion/{championGameId}/square'
+            #championIcon = f'https://cdn.communitydragon.org/latest/champion/{championGameId}/square'
+            championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/tile'
             return player['riotId'], championName, gameMode, gameId, championIcon
 
     return None, None, None, None, None
 
-# Fonction pour récupérer les résultats de la partie
-def fetchGameResult(gameId, puuid):
+# Modifier fetchGameResult pour inclure gameDuration en minutes
+def fetchGameResult(gameId, puuid, key):
     match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
     match_response = requests.get(match_url)
     match_data = match_response.json()
-    
+
     if 'info' not in match_data:
         raise ValueError(f"Erreur lors de la récupération des résultats de la partie: {match_data.get('status', {}).get('message', 'Unknown error')}")
-    
+
+    globalInfo = match_data['info']
     players = match_data['info']['participants']
+    gameDuration = globalInfo['gameDuration']
+
+    # Convertir gameDuration en secondes si nécessaire
+    if gameDuration > 3600:
+        gameDuration = gameDuration // 1000
+
+    gameDurationMinutes = gameDuration // 60
 
     for player in players:
         if player['puuid'] == puuid:
             gameResult = 'Victoire' if player['win'] else 'Défaite'
             score = f"{player['kills']}/{player['deaths']}/{player['assists']}"
-            cs = (player['totalMinionsKilled'] + player['neutralMinionsKilled'] + 
+            cs = (player['totalMinionsKilled'] + player['neutralMinionsKilled'] +
                   player['totalAllyJungleMinionsKilled'] + player['totalEnemyJungleMinionsKilled'])
             champion = player['championName']
             poste = player['lane']
             visionScore = player['visionScore']
             side = 'Bleu' if player['teamId'] == 100 else 'Rouge'
-            return gameResult, score, cs, champion, poste, visionScore, side
+            totalDamages = player['totalDamageDealtToChampions']
+            totalDamagesMinutes = round(totalDamages / gameDurationMinutes, 2)
+            pentakills = player['pentaKills']
+            quadrakills = player['quadraKills']
+            tripleKills = player['tripleKills']
+            doubleKills = player['doubleKills']
+            firstBloodKill = player['firstBloodKill']
+            firstTowerKill = player['firstTowerKill']
+            
+            return (gameResult, score, cs, champion, poste, visionScore, side, 
+                    totalDamages, totalDamagesMinutes, pentakills, quadrakills, 
+                    tripleKills, doubleKills, firstBloodKill, firstTowerKill, gameDurationMinutes)
 
-    return None, None, None, None, None, None, None
+    return (None, None, None, None, None, None, None, None, None, 
+            None, None, None, None, None, None)
