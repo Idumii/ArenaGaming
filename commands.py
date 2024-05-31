@@ -2,15 +2,12 @@ import discord
 from discord.ext import tasks
 from discord import app_commands
 from riot_api import fetchGameOngoing, fetchGameResult, requestSummoner, fetchRanks, fetchMasteries
-from data_manager import DataManager, print_summoners_to_watch
+from data_manager import DataManager  # Assurez-vous qu'il n'y a plus d'import inutile
 import urllib.parse
-import json
+import os
 
 # Initialiser DataManager
 data_manager = DataManager()
-
-# Charger les données initiales
-summoners_to_watch = data_manager.load_summoners_to_watch()
 
 def setup_commands(client, tree):
     @tree.command(name='invocateur', description='Profil d\'Invocateur')
@@ -29,7 +26,6 @@ def setup_commands(client, tree):
             )
             embed.set_thumbnail(url=summoner[3])
 
-            # Ajout des informations de rang
             for queue_type, rank_info in summonerRanks.items():
                 if queue_type == 'RANKED_SOLO_5x5':
                     embed.add_field(name='Solo/Duo', value=rank_info, inline=False)
@@ -80,13 +76,12 @@ def setup_commands(client, tree):
     @tree.command(name='addsummoner', description='Ajouter un invocateur à la liste pour être notifié quand celui-ci est en game')
     @app_commands.describe(pseudo='Nom invocateur', tag='EUW')
     async def addsummoner(interaction: discord.Interaction, pseudo: str, tag: str):
-        global summoners_to_watch
         try:
             print(f"Requesting summoner with pseudo: {pseudo}, tag: {tag}")
             summoner = await requestSummoner(pseudo, tag)
             print(f"Summoner information: {summoner}")
             if summoner:
-                summoner_id = len(summoners_to_watch) + 1
+                summoner_id = len(data_manager.summoners) + 1
                 (summonerTagline, summonerGamename, summonerLevel, profileIcon, summonerId, totalMastery_data, puuid) = summoner
                 new_summoner = {
                     'id': summoner_id, 
@@ -94,8 +89,8 @@ def setup_commands(client, tree):
                     'tag': summonerTagline, 
                     'puuid': puuid
                 }
-                summoners_to_watch.append(new_summoner)
-                data_manager.save_summoners_to_watch(summoners_to_watch)
+                data_manager.summoners.append(new_summoner)
+                data_manager.save_summoners_to_watch(data_manager.summoners)
                 await interaction.response.send_message(f"Summoner {summonerGamename}#{tag} a été ajouté à la liste avec l'ID {summoner_id}.")
             else:
                 await interaction.response.send_message("Erreur: L'invocateur n'a pas pu être trouvé.")
@@ -109,27 +104,70 @@ def setup_commands(client, tree):
     @tree.command(name='removesummoner', description='Supprimer un invocateur de la liste des suivis par ID')
     @app_commands.describe(summoner_id='ID de l\'invocateur')
     async def removesummoner(interaction: discord.Interaction, summoner_id: int):
-        global summoners_to_watch
-        initial_count = len(summoners_to_watch)
-        summoners_to_watch = [s for s in summoners_to_watch if s['id'] != summoner_id]
-        if len(summoners_to_watch) < initial_count:
-            data_manager.save_summoners_to_watch(summoners_to_watch)
+        initial_count = len(data_manager.summoners)
+        data_manager.summoners = [s for s in data_manager.summoners if s['id'] != summoner_id]
+        if len(data_manager.summoners) < initial_count:
+            data_manager.save_summoners_to_watch(data_manager.summoners)
             await interaction.response.send_message(f"Invocateur avec l'ID {summoner_id} a été supprimé de la liste.")
         else:
             await interaction.response.send_message(f"Aucun invocateur trouvé avec l'ID {summoner_id}.")
 
     @tree.command(name='listsummoners', description='Afficher la liste des invocateurs suivis')
     async def listsummoners(interaction: discord.Interaction):
-        global summoners_to_watch
         try:
-            if not summoners_to_watch:
+            if not data_manager.summoners:
                 await interaction.response.send_message("Aucun invocateur n'est suivi pour le moment.")
             else:
-                summoner_list = "\n".join([f"ID: **{summoner['id']}** - {summoner['name']}#{summoner['tag']}" for summoner in summoners_to_watch])
+                summoner_list = "\n".join([f"ID: **{summoner['id']}** - {summoner['name']}#{summoner['tag']}" for summoner in data_manager.summoners])
                 embed = discord.Embed(description=f"Liste des invocateurs suivis :\n{summoner_list}")
                 await interaction.response.send_message(embed=embed)
         except Exception as e:
             await interaction.response.send_message("Une erreur inattendue est survenue.")
             print(f"Unexpected error: {e}")
+
+    @tree.command(name='ingame', description='Savoir si un joueur est en jeu')
+    @app_commands.describe(pseudo='Nom invocateur', tag='EUW')
+    async def ingame(interaction: discord.Interaction, pseudo: str, tag: str):
+        try:
+            summoner = await requestSummoner(pseudo, tag)
+            summonerInGame = fetchGameOngoing(puuid=summoner[6])
+
+            encoded_name = urllib.parse.quote(summoner[1])
+            encoded_tag = urllib.parse.quote(summoner[0])
+            url = f"https://porofessor.gg/fr/live/euw/{encoded_name}%20-{encoded_tag}"
+            link_text = f"**[En jeu]({url})**"
+
+            embed = discord.Embed(
+                description=f"{link_text}\n\n{summoner[1]} est en **{summonerInGame[2]}**. Il joue **{summonerInGame[1]}**",
+                color=discord.Colour.blue()
+            )
+            await interaction.response.send_message(embed=embed)
+        except ValueError as e:
+            await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message("Une erreur inattendue est survenue.", ephemeral=True)
+            print(f"Unexpected error: {e}")
+            
+            
+            
+            
+        # Commande de synchronisation
+        @tree.command(name='sync', description='Owner Only')
+        async def sync(interaction: discord.Interaction):
+            idumi = os.getenv('ID_IDUMI')
+            owner_id = int(idumi)
+            if interaction.user.id == owner_id:
+                await interaction.response.send_message('Synchronization in progress...')
+                try:
+                    await tree.sync()
+                    await interaction.followup.send('Command tree synced')
+                    print('Command tree synced')
+                except Exception as e:
+                    await interaction.followup.send(f'Failed to sync commands: {e}')
+                    print(f'Failed to sync commands: {e}')
+            else:
+                id = interaction.user.id
+                await interaction.response.send_message(f'Seul le développeur peut utiliser cette commande -> {id} / {owner_id}')
+
 
     # Ajoutez d'autres commandes ici
