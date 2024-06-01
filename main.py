@@ -124,7 +124,7 @@ async def check_finished_games():
                     f"**Equipe {arenaTeam}**\n"
                     f"**Champion:** {champion}\n"
                     f"**Score:** {score}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}\n"
+                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
                     f"**Dégâts Subis:** {damageSelfMitigated}\n"
                 )
             else:
