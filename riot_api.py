@@ -200,6 +200,9 @@ def fetchGameResult(gameId, puuid, key):
             # Calculate total team damage
             totalTeamDamage = sum([p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId']])
             damageContributionPercent = round((totalDamages / totalTeamDamage) * 100, 2)
+            
+            totalTeamDamageArena = sum([p['totalDamageDealtToChampions'] for p in players if p['playerSubteamId'] == player['playerSubteamId']])
+            damageContributionPercentArena = round((totalDamages / totalTeamDamageArena) * 100, 2)
 
             arena_teams = {
                 1: 'Poro',
@@ -230,8 +233,8 @@ def fetchGameResult(gameId, puuid, key):
                     totalDamages, totalDamagesMinutes, pentakills, quadrakills,
                     tripleKills, doubleKills, firstBloodKill, firstTowerKill,
                     formattedGameDuration, gameMode, killParticipationPercent, arenaTeam,
-                    placement, damageSelfMitigated, damageContributionPercent)
+                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena)
 
     print(f"Player {puuid} not found in game {gameId}.")
     return (None, None, None, None, None, None, None, None, None, 
-            None, None, None, None, None, None, None, None, None, None, None, None)
+            None, None, None, None, None, None, None, None, None, None, None, None, damageContributionPercentArena)

@@ -83,7 +83,7 @@ async def check_finished_games():
             (gameResult, score, cs, champion, poste, visionScore, side, 
              totalDamages, totalDamagesMinutes, pentakills, quadrakills, 
              tripleKills, doubleKills, firstBloodKill, firstTowerKill, 
-             formattedGameDuration, gameMode, killParticipationPercent, arenaTeam, placement, damageSelfMitigated, damageContributionPercent) = game_result
+             formattedGameDuration, gameMode, killParticipationPercent, arenaTeam, placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena) = game_result
 
             print(f"Extracted gameResult: {gameResult}, score: {score}, cs: {cs}, champion: {champion}, gameMode: {gameMode}")
 
@@ -124,7 +124,7 @@ async def check_finished_games():
                     f"**Equipe {arenaTeam}**\n"
                     f"**Champion:** {champion}\n"
                     f"**Score:** {score}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
+                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercentArena}%\n"
                     f"**Dégâts Subis:** {damageSelfMitigated}\n"
                 )
             else:
