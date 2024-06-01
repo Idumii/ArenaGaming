@@ -104,7 +104,7 @@ async def check_finished_games():
                     f"**Score:** {score}\n"
                     f"**KP:** {killParticipationPercent}%\n"
                     f"**CS:** {cs}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}\n"
+                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
                     f"**Score de vision:** {visionScore}\n"
                 )
             elif gameMode == "ARAM":
@@ -115,7 +115,7 @@ async def check_finished_games():
                     f"**Score:** {score}\n"
                     f"**KP:** {killParticipationPercent}%\n"
                     f"**CS:** {cs}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}\n"
+                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
                 )
             elif gameMode == "CHERRY":
                 title = f"{gameResult} en Arena pour {summoner_name} - {formattedGameDuration}"
