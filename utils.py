@@ -1,14 +1,15 @@
-import data_manager
-from data_manager import summoners_to_watch
+from data_manager import DataManager
 
+# Initialiser DataManager
+data_manager = DataManager()
 
 # Fonction pour générer un identifiant simple
 def generate_simple_id():
-    return max([s['id'] for s in summoners_to_watch], default=0) + 1
+    if data_manager.summoners:
+        return max([s['id'] for s in data_manager.summoners], default=0) + 1
+    else:
+        return 1
 
 # Ajoutez d'autres fonctions utilitaires ici
 def clearGamename(gamenameWithspaces):
-    result = ""
-    for n in gamenameWithspaces:
-        result = result + " " + str(n)
-    return result
+    return gamenameWithspaces.replace(" ", "")

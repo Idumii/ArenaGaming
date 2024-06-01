@@ -13,10 +13,12 @@ class DataManager:
         if not hasattr(self, "initialized"):  # Pour éviter initialisation multiple
             self.summoners_file_path = summoners_file_path
             self.summoners = []
+            self.notified_summoners = []
             self.champion_name_dict = self.load_champion_data()
             self.load_summoners_to_watch()
-            self.notified_summoners = []  # Utilisation d'une liste de dictionnaires
             self.initialized = True
+            self.notified_games = self.load_notified_games()
+
 
     def load_summoners_to_watch(self):
         try:
@@ -38,13 +40,12 @@ class DataManager:
         try:
             with open(self.summoners_file_path, 'w', encoding='utf-8') as f:
                 json.dump(summoners, f, ensure_ascii=False, indent=4)
-            print(f"Summoners to watch saved successfully.")
+            print("Summoners to watch saved successfully.")
         except Exception as e:
             print(f"Failed to save summoners to watch: {e}")
 
-    def print_summoners_to_watch(prefix=''):
-        manager = DataManager()
-        print(f"{prefix} Summoners to watch: {manager.summoners}")
+    def print_summoners_to_watch(self, prefix=''):
+        print(f"{prefix} Summoners to watch: {self.summoners}")
 
     def load_champion_data(self):
         try:
@@ -78,3 +79,19 @@ class DataManager:
 
     def get_notified_summoners(self):
         return self.notified_summoners
+    
+    def load_notified_games(self):
+        try:
+            with open('notified_games.json', 'r') as file:
+                return json.load(file)
+        except FileNotFoundError:
+            return []
+
+    def save_notified_games(self):
+        with open('notified_games.json', 'w') as file:
+            json.dump(self.notified_games, file)
+
+    def add_notified_game(self, game_id):
+        if game_id not in self.notified_games:
+            self.notified_games.append(game_id)
+            self.save_notified_games()
