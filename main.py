@@ -83,7 +83,7 @@ async def check_finished_games():
             (gameResult, score, cs, champion, poste, visionScore, side, 
              totalDamages, totalDamagesMinutes, pentakills, quadrakills, 
              tripleKills, doubleKills, firstBloodKill, firstTowerKill, 
-             formattedGameDuration, gameMode, killParticipationPercent, arenaTeam, placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena) = game_result
+             formattedGameDuration, gameMode, killParticipationPercent, arenaTeam, placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills, teamRiftHeraldKills, teamDragonKills, teamElderDragonKills) = game_result
 
             print(f"Extracted gameResult: {gameResult}, score: {score}, cs: {cs}, champion: {champion}, gameMode: {gameMode}")
 
@@ -107,6 +107,22 @@ async def check_finished_games():
                     f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
                     f"**Score de vision:** {visionScore}\n"
                 )
+                
+                # Add team objectives if they are greater than 0
+                team_objects = []
+                if teamBaronKills > 0:
+                    team_objects.append(f"{teamBaronKills} Baron(s)")
+                if teamRiftHeraldKills > 0:
+                    team_objects.append(f"{teamRiftHeraldKills} Herald(s)")
+                if teamDragonKills > 0:
+                    team_objects.append(f"{teamDragonKills} Dragon(s)")
+                if teamElderDragonKills > 0:
+                    team_objects.append(f"{teamElderDragonKills} Elder Dragon(s)")
+
+                if team_objects:
+                    description += f"**Objectifs de l'équipe:** {', '.join(team_objects)}\n"
+
+                
             elif gameMode == "ARAM":
                 title = f"{gameResult} en ARAM pour {summoner_name} - {formattedGameDuration}"
                 description = (
@@ -143,6 +159,8 @@ async def check_finished_games():
                 description += f"**Premier sang:** :white_check_mark: \n"
             if firstTowerKill:
                 description += f"**Première tour tuée:** :white_check_mark: \n"
+                
+            
 
             embed = discord.Embed(
                 title=title,
