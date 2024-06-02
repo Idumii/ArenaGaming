@@ -138,7 +138,7 @@ def fetchGameOngoing(puuid):
             if player['puuid'] == puuid:
                 championGameId = player['championId']
                 championName = data_manager.get_champion_name(champion_id=championGameId)
-                championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/tile'
+                championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/square'
                 riotId = player.get('summonerName', 'UnknownSummoner')
                 return riotId, championName, gameMode, gameId, championIcon
                 
@@ -196,6 +196,10 @@ def fetchGameResult(gameId, puuid, key):
             damageSelfMitigated = player.get('damageSelfMitigated', 0)
             placement = player.get('placement', '?')
             playerSubteamId = player.get('playerSubteamId', '?')
+            teamBaronKills = player['teamBaronKills']
+            teamdragonKills = totalTeamDamage = sum([p['teamDragonKills'] for p in players if p['teamId'] == player['teamId']])
+            teamRiftHeraldKills = player['teamRiftHeraldKills']
+            teamElderDragonKills = player['teamElderDragonKills']
             
             # Calculate total team damage
             totalTeamDamage = sum([p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId']])
@@ -233,8 +237,8 @@ def fetchGameResult(gameId, puuid, key):
                     totalDamages, totalDamagesMinutes, pentakills, quadrakills,
                     tripleKills, doubleKills, firstBloodKill, firstTowerKill,
                     formattedGameDuration, gameMode, killParticipationPercent, arenaTeam,
-                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena)
+                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills,teamdragonKills, teamRiftHeraldKills, teamElderDragonKills)
 
     print(f"Player {puuid} not found in game {gameId}.")
     return (None, None, None, None, None, None, None, None, None, 
-            None, None, None, None, None, None, None, None, None, None, None, None, damageContributionPercentArena)
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
