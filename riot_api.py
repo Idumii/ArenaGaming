@@ -196,10 +196,10 @@ def fetchGameResult(gameId, puuid, key):
             damageSelfMitigated = player.get('damageSelfMitigated', 0)
             placement = player.get('placement', '?')
             playerSubteamId = player.get('playerSubteamId', '?')
-            teamBaronKills = player['teamBaronKills']
-            teamdragonKills = totalTeamDamage = sum([p['teamDragonKills'] for p in players if p['teamId'] == player['teamId']])
-            teamRiftHeraldKills = player['teamRiftHeraldKills']
-            teamElderDragonKills = player['teamElderDragonKills']
+            teamBaronKills = player.get('teamBaronKills', '?')
+            teamdragonKills = totalTeamDamage = sum([p.get('teamDragonKills', '?') for p in players if p['teamId'] == player['teamId']])
+            teamRiftHeraldKills = player.get('teamRiftHeraldKills', '?')
+            teamElderDragonKills = player.get('teamElderDragonKills', '?')
             
             # Calculate total team damage
             totalTeamDamage = sum([p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId']])
