@@ -237,7 +237,7 @@ def fetchGameResult(gameId, puuid, key):
                     totalDamages, totalDamagesMinutes, pentakills, quadrakills,
                     tripleKills, doubleKills, firstBloodKill, firstTowerKill,
                     formattedGameDuration, gameMode, killParticipationPercent, arenaTeam,
-                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills,teamdragonKills, teamRiftHeraldKills, teamElderDragonKills)
+                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills,teamDragonKills, teamRiftHeraldKills, teamElderDragonKills)
 
     print(f"Player {puuid} not found in game {gameId}.")
     return (None, None, None, None, None, None, None, None, None, 
