@@ -112,10 +112,10 @@ async def check_finished_games():
                 team_objects = []
                 if teamBaronKills > 0:
                     team_objects.append(f"{teamBaronKills} Baron(s)")
-                if teamRiftHeraldKills > 0:
-                    team_objects.append(f"{teamRiftHeraldKills} Herald(s)")
                 if teamDragonKills > 0:
                     team_objects.append(f"{teamDragonKills} Dragon(s)")
+                if teamRiftHeraldKills > 0:
+                    team_objects.append(f"{teamRiftHeraldKills} Herald(s)")
                 if teamElderDragonKills > 0:
                     team_objects.append(f"{teamElderDragonKills} Elder Dragon(s)")
                 print(team_objects)
