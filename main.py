@@ -167,7 +167,7 @@ async def check_finished_games():
                 description=description,
                 color=discord.Colour.green() if gameResult == "Victoire" else discord.Colour.red()
             )
-            embed.set_thumbnail(url=f'https://cdn.communitydragon.org/latest/champion/{champion}/square')
+            embed.set_thumbnail(url=f'https://cdn.communitydragon.org/latest/champion/{champion}/tile')
 
             print(f"Sending embed\nTitle: {title}\nDescription: {description}")
 

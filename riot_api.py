@@ -138,7 +138,7 @@ def fetchGameOngoing(puuid):
             if player['puuid'] == puuid:
                 championGameId = player['championId']
                 championName = data_manager.get_champion_name(champion_id=championGameId)
-                championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/square'
+                championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/tile'
                 riotId = player.get('summonerName', 'UnknownSummoner')
                 return riotId, championName, gameMode, gameId, championIcon
                 
