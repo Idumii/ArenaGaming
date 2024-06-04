@@ -159,7 +159,7 @@ def fetchGameResult(gameId, puuid, key):
     if 'info' not in match_data:
         print(f"Error fetching game results: {match_data.get('status', {}).get('message', 'Unknown error')}")
         return None
-    
+
     globalInfo = match_data['info']
     players = globalInfo['participants']
     gameDuration = globalInfo['gameDuration']
@@ -194,19 +194,18 @@ def fetchGameResult(gameId, puuid, key):
             damageSelfMitigated = player.get('damageSelfMitigated', 0)
             placement = player.get('placement', None)
             playerSubteamId = player.get('playerSubteamId', None)
-            
-            # Team objectives
-            teamBaronKills = player['challenges']['teamBaronKills']
-            teamDragonKills = player['dragonKills']
-            teamRiftHeraldKills = player['challenges']['teamRiftHeraldKills']
-            teamElderDragonKills = player['challenges']['teamElderDragonKills']
-            
-            print(f"Baron:{teamBaronKills}, dragons:{teamDragonKills}, Herald:{teamRiftHeraldKills}, Elder Dragon:{teamElderDragonKills}")
 
-            totalTeamDamage = sum([p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId']])
-            damageContributionPercent = round((totalDamages / totalTeamDamage) * 100, 2)
+            # Calculate team objectives
+            teamBaronKills = max(p.get('challenges', {}).get('teamBaronKills', 0) for p in players if p['teamId'] == player['teamId'])
+            teamDragonKills = sum(p['dragonKills'] for p in players if p['teamId'] == player['teamId'])
+            teamRiftHeraldKills = max(p.get('challenges', {}).get('teamRiftHeraldKills', 0) for p in players if p['teamId'] == player['teamId'])
+            teamElderDragonKills = max(p.get('challenges', {}).get('teamElderDragonKills', 0) for p in players if p['teamId'] == player['teamId'])
             
-            totalTeamDamageArena = sum([p['totalDamageDealtToChampions'] for p in players if p['playerSubteamId'] == player['playerSubteamId']])
+            print(f"Baron: {teamBaronKills}, Dragons: {teamDragonKills}, Herald: {teamRiftHeraldKills}, Elder Dragon: {teamElderDragonKills}")
+
+            totalTeamDamage = sum(p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId'])
+            damageContributionPercent = round((totalDamages / totalTeamDamage) * 100, 2)
+            totalTeamDamageArena = sum(p['totalDamageDealtToChampions'] for p in players if p['playerSubteamId'] == player['playerSubteamId'])
             damageContributionPercentArena = round((totalDamages / totalTeamDamageArena) * 100, 2)
 
             arena_teams = {
@@ -242,4 +241,4 @@ def fetchGameResult(gameId, puuid, key):
     
     print(f"Player {puuid} not found in game {gameId}.")
     return (None, None, None, None, None, None, None, None, None, 
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
