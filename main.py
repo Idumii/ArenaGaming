@@ -106,7 +106,7 @@ async def check_finished_games():
                     f"**CS:** {cs}\n"
                     f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
                     f"**Score de vision:** {visionScore}\n"
-                    f"**Test Objectif**: {teamBaronKills}(Baron)\n"
+                    f"**Test Objectif**: {teamBaronKills}(Baron), {teamRiftHeraldKills} (Herald), {teamDragonKills} (dragons), {teamElderDragonKills}(ancestral)\n"
                 )
                 
                 # Add team objectives if they are greater than 0

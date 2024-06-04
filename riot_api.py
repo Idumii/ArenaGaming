@@ -201,7 +201,7 @@ def fetchGameResult(gameId, puuid, key):
             teamRiftHeraldKills = player['challenges']['teamRiftHeraldKills']
             teamElderDragonKills = player['challenges']['teamElderDragonKills']
             
-            #print(f"Baron:{teamBaronKills}, dragons:{teamDragonKills}, Herald:{teamRiftHeraldKills}, Elder Dragon:{teamElderDragonKills}")
+            print(f"Baron:{teamBaronKills}, dragons:{teamDragonKills}, Herald:{teamRiftHeraldKills}, Elder Dragon:{teamElderDragonKills}")
 
             totalTeamDamage = sum([p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId']])
             damageContributionPercent = round((totalDamages / totalTeamDamage) * 100, 2)
