@@ -149,8 +149,6 @@ def fetchGameOngoing(puuid):
     return None, None, None, None, None
 
 def fetchGameResult(gameId, puuid, key):
-    import requests
-    
     match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
     match_response = requests.get(match_url)
     if match_response.status_code != 200:
@@ -185,23 +183,26 @@ def fetchGameResult(gameId, puuid, key):
             side = 'Bleu' if player['teamId'] == 100 else 'Rouge'
             totalDamages = player['totalDamageDealtToChampions']
             totalDamagesMinutes = round(totalDamages / gameDurationMinutes, 0)
-            pentakills = player['pentaKills']
-            quadrakills = player['quadraKills']
-            tripleKills = player['tripleKills']
-            doubleKills = player['doubleKills']
+            pentakills = player.get('pentaKills', 0)
+            quadrakills = player.get('quadraKills', 0)
+            tripleKills = player.get('tripleKills', 0)
+            doubleKills = player.get('doubleKills', 0)
             firstBloodKill = player.get('firstBloodKill', False)
             firstTowerKill = player.get('firstTowerKill', False)
             killParticipation = player.get('challenges', {}).get('killParticipation', 0)
             killParticipationPercent = round(killParticipation * 100, 2)
             damageSelfMitigated = player.get('damageSelfMitigated', 0)
-            placement = player.get('placement', '?')
-            playerSubteamId = player.get('playerSubteamId', '?')
-            teamBaronKills = player.get('teamBaronKills', 0)  # default to 0 instead of '?'
-            teamDragonKills = sum([p.get('teamDragonKills', 0) for p in players if p['teamId'] == player['teamId']])  # default to 0 instead of '?'
-            teamRiftHeraldKills = player.get('teamRiftHeraldKills', 0)  # default to 0 instead of '?'
-            teamElderDragonKills = player.get('teamElderDragonKills', 0)  # default to 0 instead of '?'
+            placement = player.get('placement', None)
+            playerSubteamId = player.get('playerSubteamId', None)
             
-            # Calculate total team damage
+            # Team objectives
+            teamBaronKills = player['challenges']['teamBaronKills']
+            teamDragonKills = player['dragonKills']
+            teamRiftHeraldKills = player['challenges']['teamRiftHeraldKills']
+            teamElderDragonKills = player['challenges']['teamElderDragonKills']
+            
+            #print(f"Baron:{teamBaronKills}, dragons:{teamDragonKills}, Herald:{teamRiftHeraldKills}, Elder Dragon:{teamElderDragonKills}")
+
             totalTeamDamage = sum([p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId']])
             damageContributionPercent = round((totalDamages / totalTeamDamage) * 100, 2)
             
@@ -237,8 +238,8 @@ def fetchGameResult(gameId, puuid, key):
                     totalDamages, totalDamagesMinutes, pentakills, quadrakills,
                     tripleKills, doubleKills, firstBloodKill, firstTowerKill,
                     formattedGameDuration, gameMode, killParticipationPercent, arenaTeam,
-                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills,teamDragonKills, teamRiftHeraldKills, teamElderDragonKills)
-
+                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills, teamDragonKills, teamRiftHeraldKills, teamElderDragonKills)
+    
     print(f"Player {puuid} not found in game {gameId}.")
     return (None, None, None, None, None, None, None, None, None, 
             None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)

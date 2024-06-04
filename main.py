@@ -106,6 +106,7 @@ async def check_finished_games():
                     f"**CS:** {cs}\n"
                     f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
                     f"**Score de vision:** {visionScore}\n"
+                    f"**Test Objectif**: {teamBaronKills}(Baron)\n"
                 )
                 
                 # Add team objectives if they are greater than 0
@@ -118,7 +119,7 @@ async def check_finished_games():
                     team_objects.append(f"{teamDragonKills} Dragon(s)")
                 if teamElderDragonKills > 0:
                     team_objects.append(f"{teamElderDragonKills} Elder Dragon(s)")
-
+                print(team_objects)
                 if team_objects:
                     description += f"**Objectifs de l'équipe:** {', '.join(team_objects)}\n"
 
