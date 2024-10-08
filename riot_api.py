@@ -128,6 +128,7 @@ def fetchGameOngoing(puuid):
             1700: 'Arena',
             400: 'Normal',
             490: 'Normal',
+            1400: 'Grimoire Ultime',
             0: 'Perso'
         }
         gameMode = game_modes.get(queueId, f'Mode non référencé: {queueId}')
