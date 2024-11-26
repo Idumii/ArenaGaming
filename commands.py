@@ -5,6 +5,10 @@ from riot_api import fetchGameOngoing, fetchGameResult, requestSummoner, fetchRa
 from data_manager import DataManager  # Assurez-vous qu'il n'y a plus d'import inutile.
 import urllib.parse
 import os
+from PIL import Image
+import io
+import aiohttp
+import asyncio
 
 # Initialiser DataManager
 data_manager = DataManager()
@@ -52,51 +56,102 @@ def setup_commands(client, tree):
 
             summoner = await requestSummoner(pseudo, tag)
             summonerMasteries = fetchMasteries(puuid=summoner[6], count=count)
+            
+            async def get_image(url):
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            return Image.open(io.BytesIO(await response.read()))
+                        return None
 
-            embeds = []
+            # Get all images
+            images = await asyncio.gather(*[get_image(icon) for icon, _, _, _ in summonerMasteries])
+            images = [img for img in images if img is not None]
+            
+            # Create a combined image
+            total_width = sum(img.width for img in images)
+            max_height = max(img.height for img in images)
+            
+            combined_image = Image.new('RGBA', (total_width, max_height))
+            x_offset = 0
+            for img in images:
+                combined_image.paste(img, (x_offset, 0))
+                x_offset += img.width
 
-            for icon, name, level, points in summonerMasteries:
-                embed = discord.Embed(
-                    title=name,
-                    color=discord.Colour.dark_green()
-                )
-                embed.set_thumbnail(url=icon)
-                embed.add_field(name='Niveau de maîtrise', value=level, inline=False)
-                embed.add_field(name='Points de maîtrise', value=points, inline=False)
-                embeds.append(embed)
+            # Save the combined image to bytes
+            combined_bytes = io.BytesIO()
+            combined_image.save(combined_bytes, format='PNG')
+            combined_bytes.seek(0)
+            
+            # Create the embed
+            embed = discord.Embed(
+                title=f"Top {count} Maîtrises de {pseudo}",
+                color=discord.Colour.dark_green()
+            )
 
-            for embed in embeds:
-                await interaction.followup.send(embed=embed)
+            # Add champion information in horizontal groups
+            champions_info = []
+            masteries_info = []
+            points_info = []
+
+            for i, (_, name, level, points) in enumerate(summonerMasteries, 1):
+                champions_info.append(f"#{i} - {name}")
+                masteries_info.append(f"Niveau {level}")
+                points_info.append(f"{points:,} pts")
+
+            embed.add_field(name="Champions", value="\n".join(champions_info), inline=True)
+            embed.add_field(name="Maîtrise", value="\n".join(masteries_info), inline=True)
+            embed.add_field(name="Points", value="\n".join(points_info), inline=True)
+
+            # Add the combined image at the top
+            file = discord.File(combined_bytes, filename="champions.png")
+            embed.set_image(url="attachment://champions.png")
+
+            await interaction.followup.send(file=file, embed=embed)
+
         except ValueError as e:
             await interaction.followup.send(f"Erreur : {str(e)}")
         except Exception as e:
             await interaction.followup.send("Une erreur inattendue est survenue.")
             print(f"Erreur inattendue : {e}")
+    
 
     @tree.command(name='addsummoner', description='Ajouter un invocateur à la liste pour être notifié quand celui-ci est en game')
     @app_commands.describe(pseudo='Nom invocateur', tag='EUW')
     async def addsummoner(interaction: discord.Interaction, pseudo: str, tag: str):
         try:
+            guild_id = str(interaction.guild_id)  # Convert to string for consistency
             print(f"Requesting summoner with pseudo: {pseudo}, tag: {tag}")
             summoner = await requestSummoner(pseudo, tag)
             print(f"Summoner information: {summoner}")
+            
             if summoner:
-                # Vérifie si l'invocateur est déjà dans la liste
-                if any(s['puuid'] == summoner[6] for s in data_manager.summoners):
-                    await interaction.response.send_message(f"L'invocateur {summoner[1]} est déjà suivi.")
+                # Load existing summoners for this guild
+                guild_summoners = data_manager.load_summoners_to_watch(guild_id)
+                
+                # Vérifie si l'invocateur est déjà dans la liste pour ce serveur
+                if any(s['puuid'] == summoner[6] for s in guild_summoners):
+                    await interaction.response.send_message(f"L'invocateur {summoner[1]} est déjà suivi sur ce serveur.")
                     return
                 
-                summoner_id = len(data_manager.summoners) + 1
+                # Generate new ID based on guild's current summoner list
+                summoner_id = len(guild_summoners) + 1
                 (summonerTagline, summonerGamename, summonerLevel, profileIcon, summonerId, totalMastery_data, puuid) = summoner
+                
                 new_summoner = {
-                    'id': summoner_id, 
-                    'name': summonerGamename, 
-                    'tag': summonerTagline, 
+                    'id': summoner_id,
+                    'name': summonerGamename,
+                    'tag': summonerTagline,
                     'puuid': puuid
                 }
-                data_manager.summoners.append(new_summoner)
-                data_manager.save_summoners_to_watch(data_manager.summoners)
-                await interaction.response.send_message(f"Summoner {summonerGamename}#{tag} a été ajouté à la liste avec l'ID {summoner_id}.")
+                
+                # Add to guild's summoner list and save
+                guild_summoners.append(new_summoner)
+                data_manager.save_summoners_to_watch(guild_summoners, guild_id)
+                
+                await interaction.response.send_message(
+                    f"Summoner {summonerGamename}#{summonerTagline} a été ajouté à la liste avec l'ID {summoner_id}."
+                )
             else:
                 await interaction.response.send_message("Erreur : L'invocateur n'a pas pu être trouvé.")
         except ValueError as e:
@@ -120,10 +175,14 @@ def setup_commands(client, tree):
     @tree.command(name='listsummoners', description='Afficher la liste des invocateurs suivis')
     async def listsummoners(interaction: discord.Interaction):
         try:
-            if not data_manager.summoners:
+            guild_id = str(interaction.guild_id)
+            guild_summoners = data_manager.load_summoners_to_watch(guild_id)
+            
+            if not guild_summoners:
                 await interaction.response.send_message("Aucun invocateur n'est suivi pour le moment.")
             else:
-                summoner_list = "\n".join([f"ID: **{summoner['id']}** - {summoner['name']}#{summoner['tag']}" for summoner in data_manager.summoners])
+                summoner_list = "\n".join([f"ID: **{summoner['id']}** - {summoner['name']}#{summoner['tag']}" 
+                                        for summoner in guild_summoners])
                 embed = discord.Embed(description=f"Liste des invocateurs suivis :\n{summoner_list}")
                 await interaction.response.send_message(embed=embed)
         except Exception as e:
@@ -176,3 +235,14 @@ def setup_commands(client, tree):
         else:
             id = interaction.user.id
             await interaction.response.send_message(f'Seul le développeur peut utiliser cette commande -> {id} / {owner_id}')
+
+    @tree.command(name='setchannel', description="Définir le salon d'annonce des parties")
+    async def set_notification_channel(interaction: discord.Interaction, channel: discord.TextChannel = None):
+        """Set the channel for game notifications"""
+        if channel is None:
+            channel = interaction.channel
+        
+        guild_id = interaction.guild_id
+        data_manager.set_notification_channel(guild_id, channel.id)
+        await interaction.response.send_message(f"Canal de notification défini sur {channel.mention} pour ce serveur.")
+        

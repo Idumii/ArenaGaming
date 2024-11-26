@@ -29,35 +29,52 @@ tree = app_commands.CommandTree(client)
 
 @tasks.loop(minutes=1)
 async def check_summoners_status():
-    summoners_to_watch = data_manager.summoners
-    if not summoners_to_watch:
-        print("Aucun invoqueur à surveiller.")
-        return
+    try:
+        for guild_id in data_manager.summoners_data:
+            guild_summoners = data_manager.load_summoners_to_watch(str(guild_id))
+            
+            if not guild_summoners:
+                continue
+                
+            for summoner in guild_summoners:
+                try:
+                    if not isinstance(summoner, dict):
+                        print(f"Invalid summoner data format: {summoner}")
+                        continue
+                        
+                    riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(summoner.get('puuid'))
+                    
+                    if game_id:
+                            print(f"Invoqueur trouvé en jeu: {summoner['name']}, Mode de jeu: {game_mode}, Champion: {champion_name}")
+                            notified_summoners = data_manager.get_notified_summoners()
+                            if not any(entry['puuid'] == summoner['puuid'] and entry['game_id'] == game_id for entry in notified_summoners):
+                                notification_channel_id = data_manager.get_notification_channel(guild_id)  # Added guild_id parameter
+                            if notification_channel_id:
+                                channel = client.get_channel(notification_channel_id)
+                                if channel:
+                                        encoded_name = urllib.parse.quote(summoner['name'])
+                                        url = f"https://porofessor.gg/fr/live/euw/{encoded_name}"
+                                        link_text = f"**[En jeu]({url})**"
+                                        embed = discord.Embed(
+                                            description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
+                                            color=discord.Colour.yellow()
+                                        )
+                                        embed.set_thumbnail(url=champion_icon)
+                                        await channel.send(embed=embed)
+                                        data_manager.add_notified_summoner(summoner['puuid'], game_id)
+                                        print(f"Notification envoyée pour: {summoner['name']}")
+                                        pass
+                                else:
+                                    print("Canal de notification non trouvé.")
+                            else:
+                                print("Aucun canal de notification défini.")
+                except Exception as e:
+                    print(f"Erreur de vérification pour {summoner['name']}: {e}")
 
-    for summoner in summoners_to_watch:
-        try:
-            riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(summoner['puuid'])
-            if riot_id:
-                print(f"Invoqueur trouvé en jeu: {summoner['name']}, Mode de jeu: {game_mode}, Champion: {champion_name}")
-                notified_summoners = data_manager.get_notified_summoners()
-                if not any(entry['puuid'] == summoner['puuid'] and entry['game_id'] == game_id for entry in notified_summoners):
-                    channel = discord.utils.get(client.get_all_channels(), name='test')
-                    if channel:
-                        encoded_name = urllib.parse.quote(summoner['name'])
-                        url = f"https://porofessor.gg/fr/live/euw/{encoded_name}"
-                        link_text = f"**[En jeu]({url})**"
-                        embed = discord.Embed(
-                            description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
-                            color=discord.Colour.yellow()
-                        )
-                        embed.set_thumbnail(url=champion_icon)
-                        await channel.send(embed=embed)
-                        data_manager.add_notified_summoner(summoner['puuid'], game_id)
-                        print(f"Notification envoyée pour: {summoner['name']}")
-                    else:
-                        print("Canal 'test' non trouvé.")
-        except Exception as e:
-            print(f"Erreur de vérification pour {summoner['name']}: {e}")
+    except Exception as e:
+        print(f"Erreur générale dans check_summoners_status: {e}")        
+        
+
 
 @tasks.loop(minutes=2)
 async def check_finished_games():
@@ -87,10 +104,13 @@ async def check_finished_games():
 
             print(f"Extracted gameResult: {gameResult}, score: {score}, cs: {cs}, champion: {champion}, gameMode: {gameMode}")
 
-            channel = discord.utils.get(client.get_all_channels(), name='test')
-            if not channel:
-                print("Canal 'test' non trouvé.")
-                continue
+            channel_id = data_manager.get_notification_channel()
+            if channel_id:
+                channel = client.get_channel(channel_id)
+                if not channel:
+                    print("Canal non trouvé.")
+                    continue
+
 
             summoner_name = next((s['name'] for s in data_manager.summoners if s['puuid'] == puuid), "Unknown")
             print(f"Preparing to send notification for {summoner_name}")
@@ -183,11 +203,49 @@ async def check_finished_games():
             if "Data not found - match file not found" not in str(e):
                 print(f"Error checking finished games for {puuid}: {e}")
 
+
+@client.event
+async def on_guild_join(guild):
+    """Handle new guild joins"""
+    guild_id = str(guild.id)
+    if guild_id not in data_manager.summoners_data:  # Changed from summoners
+        data_manager.summoners_data[guild_id] = []  # Changed from summoners
+        data_manager.save_summoners_to_watch([], guild_id)
+        print(f"Initialized empty summoner list for new guild {guild.id}")
+    
+    # Initialize notification channel setting
+    settings = data_manager.load_settings()
+    if 'notification_channels' not in settings:
+        settings['notification_channels'] = {}
+    if guild_id not in settings['notification_channels']:
+        settings['notification_channels'][guild_id] = None
+        data_manager.save_settings(settings)
+        print(f"Initialized notification channel setting for new guild {guild.id}")
+
 @client.event
 async def on_ready():
     await tree.sync()
     check_summoners_status.start()
     check_finished_games.start()
+    
+    settings = data_manager.load_settings()
+    if 'notification_channels' not in settings:
+        settings['notification_channels'] = {}
+    
+    # Only initialize guilds that don't have settings yet
+    for guild in client.guilds:
+        guild_id = str(guild.id)
+        if guild_id not in data_manager.summoners_data:
+            data_manager.summoners_data[guild_id] = []
+            data_manager.save_summoners_to_watch([], guild_id)
+            print(f"Initialized empty summoner list for new guild {guild.id}")
+        
+        if guild_id not in settings['notification_channels']:
+            settings['notification_channels'][guild_id] = None
+            print(f"Initialized notification channel setting for guild {guild.id}")
+    
+    if any(guild_id not in settings['notification_channels'] for guild_id in [str(g.id) for g in client.guilds]):
+        data_manager.save_settings(settings)
 
 # Initialiser les commandes
 setup_commands(client, tree)
