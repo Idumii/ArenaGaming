@@ -1,7 +1,7 @@
 import discord
 from discord.ext import tasks  # Apparemment inutilisé, donc à supprimer si non nécessaire.
 from discord import app_commands
-from riot_api import fetchGameOngoing, fetchGameResult, requestSummoner, fetchRanks, fetchMasteries
+from riot_api import fetchGameOngoing, fetchGameResult, requestSummoner, fetchRanks, fetchMasteries, requestSummonerTFT, fetchRanksTFT
 from data_manager import DataManager  # Assurez-vous qu'il n'y a plus d'import inutile.
 import urllib.parse
 import os
@@ -21,8 +21,10 @@ def setup_commands(client, tree):
         try:
             print('Invocateur trouvé')
             summoner = await requestSummoner(pseudo, tag)
+            summonerTFT = await requestSummonerTFT(pseudo, tag)
             summoner_id, puuid = summoner[4], summoner[6]
             summonerRanks = fetchRanks(summonerId=summoner_id)
+            summonerRanksTFT = fetchRanksTFT(summonerTFTId=summonerTFT[4])  
             embed = discord.Embed(
                 title=f"{summoner[1]} #{tag}",
                 description=f"Niveau: {summoner[2]}",
@@ -37,6 +39,14 @@ def setup_commands(client, tree):
                     embed.add_field(name='Flex', value=rank_info, inline=False)
                 elif queue_type == 'CHERRY':
                     embed.add_field(name='Arena', value=rank_info, inline=False)
+
+            for queue_type, rank_info in summonerRanksTFT.items():
+                if queue_type == 'RANKED_TFT':
+                    embed.add_field(name='Classé', value=rank_info, inline=False)
+                elif queue_type == 'RANKED_TFT_DOUBLE_UP':
+                    embed.add_field(name='Double Up', value=rank_info, inline=False)
+                elif queue_type == 'RANKED_TFT_TURBO':
+                    embed.add_field(name='Hyper Roll', value=rank_info, inline=False)
 
             await interaction.followup.send(embed=embed)
         except ValueError as e:

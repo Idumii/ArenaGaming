@@ -45,35 +45,33 @@ async def check_summoners_status():
                     riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(summoner.get('puuid'))
                     
                     if game_id:
-                            print(f"Invoqueur trouvé en jeu: {summoner['name']}, Mode de jeu: {game_mode}, Champion: {champion_name}")
-                            notified_summoners = data_manager.get_notified_summoners()
-                            if not any(entry['puuid'] == summoner['puuid'] and entry['game_id'] == game_id for entry in notified_summoners):
-                                notification_channel_id = data_manager.get_notification_channel(guild_id)  # Added guild_id parameter
+                        print(f"Invoqueur trouvé en jeu: {summoner['name']}, Mode de jeu: {game_mode}, Champion: {champion_name}")
+                        notified_summoners = data_manager.get_notified_summoners()
+                        if not any(entry['puuid'] == summoner['puuid'] and entry['game_id'] == game_id for entry in notified_summoners):
+                            # Move this line inside the if block
+                            notification_channel_id = data_manager.get_notification_channel(guild_id)
                             if notification_channel_id:
                                 channel = client.get_channel(notification_channel_id)
                                 if channel:
-                                        encoded_name = urllib.parse.quote(summoner['name'])
-                                        url = f"https://porofessor.gg/fr/live/euw/{encoded_name}"
-                                        link_text = f"**[En jeu]({url})**"
-                                        embed = discord.Embed(
-                                            description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
-                                            color=discord.Colour.yellow()
-                                        )
-                                        embed.set_thumbnail(url=champion_icon)
-                                        await channel.send(embed=embed)
-                                        data_manager.add_notified_summoner(summoner['puuid'], game_id)
-                                        print(f"Notification envoyée pour: {summoner['name']}")
-                                        pass
+                                    encoded_name = urllib.parse.quote(summoner['name'])
+                                    url = f"https://porofessor.gg/fr/live/euw/{encoded_name}"
+                                    link_text = f"**[En jeu]({url})**"
+                                    embed = discord.Embed(
+                                        description=f"{link_text}\n\n{summoner['name']} est en **{game_mode}**. Il joue **{champion_name}**",
+                                        color=discord.Colour.yellow()
+                                    )
+                                    embed.set_thumbnail(url=champion_icon)
+                                    await channel.send(embed=embed)
+                                    data_manager.add_notified_summoner(summoner['puuid'], game_id)
+                                    print(f"Notification envoyée pour: {summoner['name']}")
                                 else:
                                     print("Canal de notification non trouvé.")
                             else:
                                 print("Aucun canal de notification défini.")
                 except Exception as e:
                     print(f"Erreur de vérification pour {summoner['name']}: {e}")
-
     except Exception as e:
-        print(f"Erreur générale dans check_summoners_status: {e}")        
-        
+            print(f"Erreur générale dans check_summoners_status: {e}")
 
 
 @tasks.loop(minutes=2)
@@ -90,8 +88,24 @@ async def check_finished_games():
         try:
             print(f"Checking game result for PUUID: {puuid}, Game ID: {game_id}")
 
+            # Find the guild_id and summoner info
+            guild_id = None
+            summoner_name = None
+            for gid, guild_summoners in data_manager.summoners_data.items():
+                for s in guild_summoners:
+                    if s.get('puuid') == puuid:
+                        guild_id = gid
+                        summoner_name = s.get('name', 'Unknown')
+                        break
+                if guild_id:
+                    break
+
+            if guild_id is None:
+                print(f"Could not find guild_id for PUUID: {puuid}")
+                continue
+
             game_result = fetchGameResult(game_id, puuid, key)
-            print(f"Fetched game result for {puuid}: {game_result}")
+            print(f"Game result for player {puuid} in game {game_id}: {game_result}")
 
             if not game_result or not isinstance(game_result, tuple):
                 print(f"An unexpected result or None was returned for PUUID: {puuid}, Game ID: {game_id}")
@@ -100,108 +114,99 @@ async def check_finished_games():
             (gameResult, score, cs, champion, poste, visionScore, side, 
              totalDamages, totalDamagesMinutes, pentakills, quadrakills, 
              tripleKills, doubleKills, firstBloodKill, firstTowerKill, 
-             formattedGameDuration, gameMode, killParticipationPercent, arenaTeam, placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills, teamRiftHeraldKills, teamDragonKills, teamElderDragonKills) = game_result
+             formattedGameDuration, gameMode, killParticipationPercent, arenaTeam, placement, 
+             damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, 
+             teamBaronKills, teamRiftHeraldKills, teamDragonKills, teamElderDragonKills) = game_result
 
             print(f"Extracted gameResult: {gameResult}, score: {score}, cs: {cs}, champion: {champion}, gameMode: {gameMode}")
 
-            channel_id = data_manager.get_notification_channel()
+            channel_id = data_manager.get_notification_channel(guild_id)
             if channel_id:
                 channel = client.get_channel(channel_id)
                 if not channel:
                     print("Canal non trouvé.")
                     continue
 
+                if gameMode == "CLASSIC":
+                    title = f"{gameResult} sur la Faille de l'invocateur pour {summoner_name} - {formattedGameDuration}"
+                    description = (
+                        f"**Champion:** {champion}\n"
+                        f"**Side:** {side}\n"   
+                        f"**Poste:** {poste}\n"
+                        f"**Score:** {score}\n"
+                        f"**KP:** {killParticipationPercent}%\n"
+                        f"**CS:** {cs}\n"
+                        f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
+                        f"**Score de vision:** {visionScore}\n"
+                    )
+                    
+                    # Add team objectives if they are greater than 0
+                    team_objects = []
+                    if teamBaronKills > 0:
+                        team_objects.append(f"{teamBaronKills} Baron(s)")
+                    if teamDragonKills > 0:
+                        team_objects.append(f"{teamDragonKills} Dragon(s)")
+                    if teamRiftHeraldKills > 0:
+                        team_objects.append(f"{teamRiftHeraldKills} Herald(s)")
+                    if teamElderDragonKills > 0:
+                        team_objects.append(f"{teamElderDragonKills} Elder Dragon(s)")
+                    if team_objects:
+                        description += f"**Objectifs de l'équipe:** {', '.join(team_objects)}\n"
 
-            summoner_name = next((s['name'] for s in data_manager.summoners if s['puuid'] == puuid), "Unknown")
-            print(f"Preparing to send notification for {summoner_name}")
+                elif gameMode == "ARAM":
+                    title = f"{gameResult} en ARAM pour {summoner_name} - {formattedGameDuration}"
+                    description = (
+                        f"**Champion:** {champion}\n"
+                        f"**Side:** {side}\n"   
+                        f"**Score:** {score}\n"
+                        f"**KP:** {killParticipationPercent}%\n"
+                        f"**CS:** {cs}\n"
+                        f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
+                    )
+                elif gameMode == "CHERRY":
+                    title = f"{gameResult} en Arena pour {summoner_name} - {formattedGameDuration}"
+                    description = (
+                        f"**Top {placement}**\n"
+                        f"**Equipe {arenaTeam}**\n"
+                        f"**Champion:** {champion}\n"
+                        f"**Score:** {score}\n"
+                        f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercentArena}%\n"
+                        f"**Dégâts Subis:** {damageSelfMitigated}\n"
+                    )
 
-            if gameMode == "CLASSIC":
-                title = f"{gameResult} sur la Faille de l'invocateur pour {summoner_name} - {formattedGameDuration}"
-                description = (
-                    f"**Champion:** {champion}\n"
-                    f"**Side:** {side}\n"   
-                    f"**Poste:** {poste}\n"
-                    f"**Score:** {score}\n"
-                    f"**KP:** {killParticipationPercent}%\n"
-                    f"**CS:** {cs}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
-                    f"**Score de vision:** {visionScore}\n"
+                if pentakills > 0:
+                    description += f"**Nombre de pentakills:** {pentakills}\n"
+                if quadrakills > 0:
+                    description += f"**Nombre de quadrakills:** {quadrakills}\n"
+                if tripleKills > 0:
+                    description += f"**Nombre de triple kills:** {tripleKills}\n"
+                if doubleKills > 0:
+                    description += f"**Nombre de double kills:** {doubleKills}\n"
+                if firstBloodKill:
+                    description += f"**Premier sang:** :white_check_mark: \n"
+                if firstTowerKill:
+                    description += f"**Première tour tuée:** :white_check_mark: \n"
+
+                embed = discord.Embed(
+                    title=title,
+                    description=description,
+                    color=discord.Colour.green() if gameResult == "Victoire" else discord.Colour.red()
                 )
-                
-                # Add team objectives if they are greater than 0
-                team_objects = []
-                if teamBaronKills > 0:
-                    team_objects.append(f"{teamBaronKills} Baron(s)")
-                if teamDragonKills > 0:
-                    team_objects.append(f"{teamDragonKills} Dragon(s)")
-                if teamRiftHeraldKills > 0:
-                    team_objects.append(f"{teamRiftHeraldKills} Herald(s)")
-                if teamElderDragonKills > 0:
-                    team_objects.append(f"{teamElderDragonKills} Elder Dragon(s)")
-                print(team_objects)
-                if team_objects:
-                    description += f"**Objectifs de l'équipe:** {', '.join(team_objects)}\n"
+                embed.set_thumbnail(url=f'https://cdn.communitydragon.org/latest/champion/{champion}/tile')
 
-                
-            elif gameMode == "ARAM":
-                title = f"{gameResult} en ARAM pour {summoner_name} - {formattedGameDuration}"
-                description = (
-                    f"**Champion:** {champion}\n"
-                    f"**Side:** {side}\n"   
-                    f"**Score:** {score}\n"
-                    f"**KP:** {killParticipationPercent}%\n"
-                    f"**CS:** {cs}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercent}%\n"
-                )
-            elif gameMode == "CHERRY":
-                title = f"{gameResult} en Arena pour {summoner_name} - {formattedGameDuration}"
-                description = (
-                    f"**Top {placement}**\n"
-                    f"**Equipe {arenaTeam}**\n"
-                    f"**Champion:** {champion}\n"
-                    f"**Score:** {score}\n"
-                    f"**Dégâts:** {totalDamages} - {totalDamagesMinutes}/min | **Contribution aux dégâts de l'équipe:** {damageContributionPercentArena}%\n"
-                    f"**Dégâts Subis:** {damageSelfMitigated}\n"
-                )
-            else:
-                title = f"Erreur lors de la récupération de la partie"
-                description = ""
+                try:
+                    await channel.send(embed=embed)
+                    print(f"Notification sent for {summoner_name}.")
+                except Exception as e:
+                    print(f"An error occurred while sending the notification: {e}")
 
-            if pentakills > 0:
-                description += f"**Nombre de pentakills:** {pentakills}\n"
-            if quadrakills > 0:
-                description += f"**Nombre de quadrakills:** {quadrakills}\n"
-            if tripleKills > 0:
-                description += f"**Nombre de triple kills:** {tripleKills}\n"
-            if doubleKills > 0:
-                description += f"**Nombre de double kills:** {doubleKills}\n"
-            if firstBloodKill:
-                description += f"**Premier sang:** :white_check_mark: \n"
-            if firstTowerKill:
-                description += f"**Première tour tuée:** :white_check_mark: \n"
-                
-            
+                data_manager.remove_specific_notified_summoner(puuid, game_id)
+                print(f"Removed {puuid} with gameId {game_id} from notified_summoners")
 
-            embed = discord.Embed(
-                title=title,
-                description=description,
-                color=discord.Colour.green() if gameResult == "Victoire" else discord.Colour.red()
-            )
-            embed.set_thumbnail(url=f'https://cdn.communitydragon.org/latest/champion/{champion}/tile')
-
-            print(f"Sending embed\nTitle: {title}\nDescription: {description}")
-
-            try:
-                await channel.send(embed=embed)
-                print(f"Notification sent for {summoner_name}.")
-            except Exception as e:
-                print(f"An error occurred while sending the notification: {e}")
-
-            data_manager.remove_specific_notified_summoner(puuid, game_id)
-            print(f"Removed {puuid} with gameId {game_id} from notified_summoners")
         except Exception as e:
-            if "Data not found - match file not found" not in str(e):
-                print(f"Error checking finished games for {puuid}: {e}")
+            print(f"Error checking finished games for {puuid}: {e}")
+
+
 
 
 @client.event

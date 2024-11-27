@@ -9,9 +9,13 @@ data_manager = DataManager()
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
 key = os.getenv("API_RIOT_KEY")
+key_tft = os.getenv("API_RIOT_TFT_KEY")
 
 if not key:
     raise ValueError("API_RIOT_KEY n'est pas bien défini")
+
+if not key_tft:
+    raise ValueError("API_RIOT_TFT_KEY n'est pas bien défini")
 
 # Fonction pour demander les informations de l'invocateur
 async def requestSummoner(name, tag):
@@ -139,7 +143,7 @@ def fetchGameOngoing(puuid):
             if player['puuid'] == puuid:
                 championGameId = player['championId']
                 championName = data_manager.get_champion_name(champion_id=championGameId)
-                championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championGameId}/tile'
+                championIcon = f'https://cdn.communitydragon.org/14.23/champion/{championGameId}/tile'
                 riotId = player.get('summonerName', 'UnknownSummoner')
                 return riotId, championName, gameMode, gameId, championIcon
                 
@@ -243,3 +247,67 @@ def fetchGameResult(gameId, puuid, key):
     print(f"Player {puuid} not found in game {gameId}.")
     return (None, None, None, None, None, None, None, None, None, 
             None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+
+
+
+
+#### PARTIE TFT ####
+# Fonction pour demander les informations de l'invocateur TFT
+async def requestSummonerTFT(name, tag):
+    account_url = f'https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{name}/{tag}?api_key={key_tft}'
+    account_response = requests.get(account_url)
+
+    if account_response.status_code == 404:
+        print('Compte n\'existe pas')
+        raise ValueError("Invocateur n'existe pas")
+    elif account_response.status_code != 200:
+        print('Erreur dans l\'obtention des données du compte en TFT')
+        raise ValueError("Erreur lors de l'obtention des données en TFT")
+
+    account_data = account_response.json()
+    puuid = account_data['puuid']
+
+    summoner_tft_url = f'https://euw1.api.riotgames.com/tft/summoner/v1/summoners/by-puuid/{puuid}?api_key={key_tft}'
+    summoner_tft_response = requests.get(summoner_tft_url)
+
+    if summoner_tft_response.status_code == 404:
+        print('Invocateur n\'existe pas')
+        raise ValueError("Invocateur n'existe pas")
+    elif summoner_tft_response.status_code != 200:
+        print('Erreur dans l\'obtention des données de l\'invocateur en TFT')
+        raise ValueError("Erreur lors de l'obtention des données en TFT")
+
+    summoner_tft_data = summoner_tft_response.json()
+    summonerTFTId = summoner_tft_data.get('id')
+    summonerTFTTagline = account_data.get('tagLine')
+    summonerTFTGamename = account_data.get('gameName')
+    summonerTFTLevel = "Lvl." + str(summoner_tft_data['summonerLevel'])
+    profileIcon = f'https://cdn.communitydragon.org/14.10.1/profile-icon/{summoner_tft_data["profileIconId"]}'
+
+
+    return summonerTFTTagline, summonerTFTGamename, summonerTFTLevel, profileIcon, summonerTFTId, puuid
+
+# Récupérer les rangs des invocateurs
+def fetchRanksTFT(summonerTFTId):
+    rankstft_url = f'https://euw1.api.riotgames.com/tft/league/v1/entries/by-summoner/{summonerTFTId}?api_key={key_tft}'
+    rankstft_response = requests.get(rankstft_url)
+
+    if rankstft_response.status_code != 200:
+        raise ValueError(f"Erreur lors de la récupération des rangs: {rankstft_response.status_code} - {rankstft_response.json().get('status', {}).get('message', '')}")
+
+    rankstft_data = rankstft_response.json()
+    rankstft = {}
+    for entry in rankstft_data:
+        queue_type_tft = entry['queueType']
+        tier_tft = entry.get('tier', 'Unranked')
+        rank_tft = entry.get('rank', '')
+        wins_tft = entry.get('wins', 0)
+        losses_tft = entry.get('losses', 0)
+        league_points_tft = entry.get('leaguePoints', 0)
+        rated_tier_tft = entry.get('ratedTier', 'Unranked')
+        rated_rating_tft = entry.get('ratedRating', 0)
+
+        win_rate_tft = round(wins_tft / (wins_tft + losses_tft) * 100, 2) if (wins_tft + losses_tft) > 0 else 0
+        rankstft[queue_type_tft] = f"{tier_tft} {rank_tft} {league_points_tft} LPs {rated_tier_tft} {rated_rating_tft} - {wins_tft}W/{losses_tft}L ({win_rate_tft}% WR)"
+
+    return rankstft
