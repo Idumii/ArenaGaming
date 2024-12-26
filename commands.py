@@ -13,6 +13,8 @@ import asyncio
 # Initialiser DataManager
 data_manager = DataManager()
 
+key = os.getenv("API_RIOT_KEY")
+
 def setup_commands(client, tree):
     # Remove any existing command definitions first
     tree.clear_commands(guild=None)
@@ -23,8 +25,8 @@ def setup_commands(client, tree):
         await interaction.response.defer()
         try:
             print('Invocateur trouvé')
-            summoner = await requestSummoner(pseudo, tag)
-            summonerTFT = await requestSummonerTFT(pseudo, tag)
+            summoner = await requestSummoner(pseudo, tag, key)
+            summonerTFT = await requestSummonerTFT(pseudo, tag, key)
             summoner_id, puuid = summoner[4], summoner[6]
             summonerRanks = fetchRanks(summonerId=summoner_id)
             summonerRanksTFT = fetchRanksTFT(summonerTFTId=summonerTFT[4])  
@@ -67,7 +69,7 @@ def setup_commands(client, tree):
                 await interaction.followup.send("Veuillez spécifier un nombre entre 1 et 5.")
                 return
 
-            summoner = await requestSummoner(pseudo, tag)
+            summoner = await requestSummoner(pseudo, tag, key = key)
             summonerMasteries = fetchMasteries(puuid=summoner[6], count=count)
             
             async def get_image(url):
@@ -135,7 +137,7 @@ def setup_commands(client, tree):
         try:
             guild_id = str(interaction.guild_id)  # Convert to string for consistency
             print(f"Requesting summoner with pseudo: {pseudo}, tag: {tag}")
-            summoner = await requestSummoner(pseudo, tag)
+            summoner = await requestSummoner(pseudo, tag, key)
             print(f"Summoner information: {summoner}")
                 
             if summoner:
@@ -229,7 +231,7 @@ def setup_commands(client, tree):
     @app_commands.describe(pseudo='Nom invocateur', tag='EUW')
     async def ingame(interaction: discord.Interaction, pseudo: str, tag: str):
         try:
-            summoner = await requestSummoner(pseudo, tag)
+            summoner = await requestSummoner(pseudo, tag, key)
             riot_id, champion_name, game_mode, game_id, champion_icon = fetchGameOngoing(puuid=summoner[6])
 
             if riot_id and game_mode:
