@@ -5,3 +5,10 @@ bfg.jar
 summoners_to_watch.json
 .vscode
 test_fetch_game_ongoing.py
+temp.py
+test_tftp.py
+test_fetch_game_result.py
+test_fetch_ranks.py
+daily_ranks.json
+tftgamedataexemple.tft
+_pycache_/

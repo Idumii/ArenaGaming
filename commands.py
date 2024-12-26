@@ -14,6 +14,9 @@ import asyncio
 data_manager = DataManager()
 
 def setup_commands(client, tree):
+    # Remove any existing command definitions first
+    tree.clear_commands(guild=None)
+
     @tree.command(name='invocateur', description='Profil d\'Invocateur')
     @app_commands.describe(pseudo='Nom invocateur', tag='EUW')
     async def invocateur(interaction: discord.Interaction, pseudo: str, tag: str):
@@ -134,33 +137,32 @@ def setup_commands(client, tree):
             print(f"Requesting summoner with pseudo: {pseudo}, tag: {tag}")
             summoner = await requestSummoner(pseudo, tag)
             print(f"Summoner information: {summoner}")
-            
+                
             if summoner:
                 # Load existing summoners for this guild
                 guild_summoners = data_manager.load_summoners_to_watch(guild_id)
-                
+                    
                 # Vérifie si l'invocateur est déjà dans la liste pour ce serveur
                 if any(s['puuid'] == summoner[6] for s in guild_summoners):
                     await interaction.response.send_message(f"L'invocateur {summoner[1]} est déjà suivi sur ce serveur.")
                     return
-                
+                    
                 # Generate new ID based on guild's current summoner list
                 summoner_id = len(guild_summoners) + 1
-                (summonerTagline, summonerGamename, summonerLevel, profileIcon, summonerId, totalMastery_data, puuid) = summoner
-                
                 new_summoner = {
                     'id': summoner_id,
-                    'name': summonerGamename,
-                    'tag': summonerTagline,
-                    'puuid': puuid
+                    'name': summoner[1],
+                    'tag': tag,
+                    'puuid': summoner[6],
+                    'summonerId': summoner[4]  # Added the Riot summonerId
                 }
-                
+                    
                 # Add to guild's summoner list and save
                 guild_summoners.append(new_summoner)
                 data_manager.save_summoners_to_watch(guild_summoners, guild_id)
-                
+                    
                 await interaction.response.send_message(
-                    f"Summoner {summonerGamename}#{summonerTagline} a été ajouté à la liste avec l'ID {summoner_id}."
+                    f"Summoner {summoner[1]}#{tag} a été ajouté à la liste avec l'ID {summoner_id}."
                 )
             else:
                 await interaction.response.send_message("Erreur : L'invocateur n'a pas pu être trouvé.")
@@ -171,16 +173,40 @@ def setup_commands(client, tree):
             print(f"Erreur inattendue : {e}")
             await interaction.response.send_message("Une erreur inattendue est survenue.")
 
-    @tree.command(name='removesummoner', description='Supprimer un invocateur de la liste des suivis par ID')
-    @app_commands.describe(summoner_id='ID de l\'invocateur')
-    async def removesummoner(interaction: discord.Interaction, summoner_id: int):
-        initial_count = len(data_manager.summoners)
-        data_manager.summoners = [s for s in data_manager.summoners if s['id'] != summoner_id]
-        if len(data_manager.summoners) < initial_count:
-            data_manager.save_summoners_to_watch(data_manager.summoners)
-            await interaction.response.send_message(f"Invocateur avec l'ID {summoner_id} a été supprimé de la liste.")
-        else:
-            await interaction.response.send_message(f"Aucun invocateur trouvé avec l'ID {summoner_id}.")
+    @tree.command(name="removesummoner", description="Supprimer un invocateur de la liste de suivi")
+    async def removesummoner(interaction: discord.Interaction, identifier: str):
+        try:
+            guild_id = str(interaction.guild_id)
+            guild_summoners = data_manager.load_summoners_to_watch(guild_id)
+
+            if identifier.lower() == 'all':
+                data_manager.save_summoners_to_watch([], guild_id)
+                await interaction.response.send_message("Tous les invocateurs ont été supprimés de la liste de suivi.")
+                return
+
+            try:
+                summoner_id = int(identifier)
+            except ValueError:
+                await interaction.response.send_message("L'identifiant doit être un nombre ou 'all'.", ephemeral=True)
+                return
+
+            summoner_to_remove = None
+            for summoner in guild_summoners:
+                if summoner['id'] == summoner_id:
+                    summoner_to_remove = summoner
+                    break
+
+            if summoner_to_remove:
+                guild_summoners.remove(summoner_to_remove)
+                data_manager.save_summoners_to_watch(guild_summoners, guild_id)
+                await interaction.response.send_message(f"L'invocateur {summoner_to_remove['name']} a été supprimé de la liste.")
+            else:
+                await interaction.response.send_message(f"Aucun invocateur trouvé avec l'ID {summoner_id}.", ephemeral=True)
+
+        except Exception as e:
+            await interaction.response.send_message("Une erreur inattendue est survenue.")
+            print(f"Unexpected error: {e}")
+
 
     @tree.command(name='listsummoners', description='Afficher la liste des invocateurs suivis')
     async def listsummoners(interaction: discord.Interaction):
@@ -256,3 +282,18 @@ def setup_commands(client, tree):
         data_manager.set_notification_channel(guild_id, channel.id)
         await interaction.response.send_message(f"Canal de notification défini sur {channel.mention} pour ce serveur.")
         
+    @tree.command(name="getchannel", description="Voir le canal actuel des notifications")
+    async def getchannel(interaction: discord.Interaction):
+        try:
+            guild_id = str(interaction.guild_id)
+            channel_id = data_manager.get_notification_channel(guild_id)
+            if channel_id:
+                channel = interaction.guild.get_channel(channel_id)
+                if channel:
+                    await interaction.response.send_message(f"Canal actuel: {channel.mention}")
+                else:
+                    await interaction.response.send_message("Canal configuré mais introuvable.")
+            else:
+                await interaction.response.send_message("Aucun canal configuré.")
+        except Exception as e:
+            await interaction.response.send_message(f"Erreur: {e}", ephemeral=True)

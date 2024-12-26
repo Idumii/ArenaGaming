@@ -1,6 +1,6 @@
 import json
 import os
-
+from datetime import datetime, timedelta  # Add this import if not already present
 
 class DataManager:
     _instance = None
@@ -13,18 +13,149 @@ class DataManager:
     def __init__(self, summoners_file_path='summoners_to_watch.json', client=None):
         if not hasattr(self, "initialized"):
             self.summoners_file_path = summoners_file_path
-            self.summoners_data = {}  # Changed from self.summoners to self.summoners_data
+            self.summoners_data = {}
             self.notified_summoners = []
             self.champion_name_dict = self.load_champion_data()
             self.client = client
+            self.lp_tracker = {}  # Add this to track LP for each summoner
+            self.temp_lp_data = {}  # Inisialisation de la variable temporaire
+            self.lp_data_file = 'lp_data.json'
             self.load_all_summoners()
             if client:
                 self.migrate_legacy_data()
             self.initialized = True
             self.notified_games = self.load_notified_games()
             self.notification_channel = None
+            
+
+    def store_temp_lp(self, summoner_id, queue_type, lp, tier, rank):
+        """Store current LP and rank for a summoner in a specific queue"""
+        if summoner_id not in self.lp_tracker:
+            self.lp_tracker[summoner_id] = {}
+        
+        self.lp_tracker[summoner_id][queue_type] = {
+            'lp': lp,
+            'tier': tier,
+            'rank': rank
+        }
+        print(f"Stored LP data for summoner ID {summoner_id} in {queue_type}")
+
+    def get_lp_difference(self, summoner_id, queue_type, current_lp, current_tier, current_rank):
+        """Calculate LP difference between stored and current LP"""
+        if summoner_id not in self.lp_tracker or queue_type not in self.lp_tracker[summoner_id]:
+            return None
+
+        old_data = self.lp_tracker[summoner_id][queue_type]
+        
+        # Check for tier/rank changes
+        if old_data['tier'] != current_tier or old_data['rank'] != current_rank:
+            return f"**{old_data['tier']} {old_data['rank']}** → **{current_tier} {current_rank}**"
+        
+        # Calculate LP change within same rank
+        lp_change = current_lp - old_data['lp']
+        if lp_change != 0:
+            return f"{'+' if lp_change > 0 else ''}{lp_change} LP"
+        
+        return None
+
+    # Add this method to DataManager class
+    def get_stored_lp(self, summoner_id, queue_type):
+        """Get stored LP data for a summoner in a specific queue"""
+        if not hasattr(self, 'lp_tracker'):
+            return None
+        
+        if summoner_id not in self.lp_tracker:
+            return None
+            
+        if queue_type not in self.lp_tracker[summoner_id]:
+            return None
+            
+        return self.lp_tracker[summoner_id][queue_type]
+
+    def clear_temp_lp(self, summoner_id):
+        """Clear temporary LP data for a summoner"""
+        if summoner_id in self.lp_tracker:
+            del self.lp_tracker[summoner_id]
+            print(f"Cleared LP data for summoner ID {summoner_id}")
 
 
+
+    def store_daily_rank(self, summoner_id, ranks_data):
+        """Store daily rank data for a summoner"""
+        if not hasattr(self, 'daily_ranks'):
+            self.load_daily_ranks()
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        if today not in self.daily_ranks:
+            self.daily_ranks[today] = {}
+        
+        self.daily_ranks[today][summoner_id] = ranks_data
+        self.save_daily_ranks()
+        print(f"Debug - Stored daily rank for {summoner_id}")
+
+    def load_daily_ranks(self):
+        """Load daily ranks from file"""
+        try:
+            with open('daily_ranks.json', 'r', encoding='utf-8') as f:
+                self.daily_ranks = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.daily_ranks = {}
+        return self.daily_ranks
+
+    def save_daily_ranks(self):
+        """Save daily ranks to file"""
+        with open('daily_ranks.json', 'w', encoding='utf-8') as f:
+            json.dump(self.daily_ranks, f, ensure_ascii=False, indent=4)
+
+    def get_daily_rank_changes(self, summoner_id):
+        """Get rank changes since last check"""
+        if not hasattr(self, 'daily_ranks'):
+            self.load_daily_ranks()
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        today_ranks = self.daily_ranks.get(today, {}).get(summoner_id)
+        yesterday_ranks = self.daily_ranks.get(yesterday, {}).get(summoner_id)
+        
+        if not yesterday_ranks:
+            return None
+        
+        changes = []
+        if today_ranks:
+            for queue_type in ['RANKED_SOLO_5x5', 'RANKED_FLEX_SR']:
+                if queue_type in yesterday_ranks and queue_type in today_ranks:
+                    old_rank = yesterday_ranks[queue_type]
+                    new_rank = today_ranks[queue_type]
+                    
+                    if (old_rank['tier'] != new_rank['tier'] or 
+                        old_rank['rank'] != new_rank['rank'] or 
+                        old_rank['lp'] != new_rank['lp']):
+                        
+                        queue_name = "Solo/Duo" if queue_type == "RANKED_SOLO_5x5" else "Flex"
+                        if old_rank['tier'] != new_rank['tier'] or old_rank['rank'] != new_rank['rank']:
+                            changes.append({
+                                'queue': queue_name,
+                                'change_type': 'division',
+                                'old': f"{old_rank['tier']} {old_rank['rank']}",
+                                'new': f"{new_rank['tier']} {new_rank['rank']}",
+                                'lp_change': new_rank['lp'] - old_rank['lp']
+                            })
+                        else:
+                            lp_change = new_rank['lp'] - old_rank['lp']
+                            if lp_change != 0:
+                                changes.append({
+                                    'queue': queue_name,
+                                    'change_type': 'lp',
+                                    'tier': new_rank['tier'],
+                                    'rank': new_rank['rank'],
+                                    'lp_change': lp_change
+                                })
+        
+        return changes if changes else None
+
+
+    
     def load_all_summoners(self):
         """Load all summoners data from file, preserving existing data"""
         try:
@@ -120,12 +251,15 @@ class DataManager:
     def get_champion_name(self, champion_id):
         return self.champion_name_dict.get(champion_id, "Unknown Champion")
 
-    def add_notified_summoner(self, puuid, game_id):
+    def add_notified_summoner(self, puuid, game_id, summoner_id):
+        """Add a summoner to the notified list with their summoner_id"""
         if not any(entry['puuid'] == puuid and entry['game_id'] == game_id for entry in self.notified_summoners):
-            self.notified_summoners.append(
-                {"puuid": puuid, "game_id": game_id})
-        print(f"Added {puuid} to notified_summoners with gameId: {game_id}")
-        print(self.notified_summoners)
+            self.notified_summoners.append({
+                "puuid": puuid,
+                "game_id": game_id,
+                "summoner_id": summoner_id  # Using summoner_id instead of riot_id
+            })
+        print(f"Added summoner to notified_summoners with gameId: {game_id}")
         return self
 
     def remove_notified_summoner(self, puuid):
@@ -220,3 +354,5 @@ class DataManager:
                 
         except Exception as e:
             print(f"Migration failed: {e}")
+
+

@@ -1,0 +1,36 @@
+
+TFT
+{
+    "id": "n-DtS1LlM1dyxaOln0PU1CMGzB6PbHk9bvYhg5CZ-63MxbM",
+    "accountId": "4FP7iijgD1dVUbHkldfb7adP5aonjTQKtiLvkLbRnbPcWk8",
+    "puuid": "v79FSwoZY6GLJl3nM-ZonMgat4c7xg6KUc7stQzcUVMko_tecerDr8jCiTKlJI9PWYKvanPV9HONDQ",
+    "profileIconId": 5722,
+    "revisionDate": 1732715993838,
+    "summonerLevel": 764
+}
+
+
+LEAGUE
+{
+    "id": "2neQ2pCQxp4aS7oXj-lT89KWdU1QQYJGgfko9_GM3r9Y3jY",
+    "accountId": "JSUx89qhRfYp6tliQaeqIEhZjZTPm7Cun1acB9SlIUopm04",
+    "puuid": "U9TxBvgORkdvLp0tq6xoU5oaJUB_MSTBrBzJcCMRkIhiCObznmpfrpGfzM9Dw2NL7p-WYPYHEccTWA",
+    "profileIconId": 5722,
+    "revisionDate": 1732742691000,
+    "summonerLevel": 764
+}
+
+
+
+
+
+
+{
+    "puuid": "2zP8mDJm293eH3bnK2lGggbOT5c5oVd--jMY01FRuszwtvtfOQFTk4Op4TWsrdv1ejHwTM4NvQnmuw",
+    "gameName": "B2 Byss",
+    "tagLine": "EUW"
+}
+
+Testing TFT lookup for B2 Byss#EUW
+Summoner data: ('EUW', 'B2 Byss', 'Lvl.712', 'https://cdn.communitydragon.org/14.10.1/profile-icon/6069', '3wdRdtbqQhc62iT8sIbbqyx4t5maWwWaYAvJJUH6PoUcmN4', 'qFaFjHMjTfyjhVT-csplvmIpmCci_cn9JAhTJJkDwB3Z6YoU6EYiK22Pkn7proZaFfbSpIwL39M-xg') 
+TFT Ranks: {'RANKED_TFT': 'SILVER II 68 LPs Unranked 0 - 17W/15L (53.12% WR)', 'RANKED_TFT_DOUBLE_UP': 'SILVER III 82 LPs Unranked 0 - 19W/39L (32.76% WR)'}

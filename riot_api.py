@@ -18,7 +18,7 @@ if not key_tft:
     raise ValueError("API_RIOT_TFT_KEY n'est pas bien défini")
 
 # Fonction pour demander les informations de l'invocateur
-async def requestSummoner(name, tag):
+async def requestSummoner(name, tag, key):
     account_url = f'https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{name}/{tag}?api_key={key}'
     account_response = requests.get(account_url)
 
@@ -57,24 +57,46 @@ async def requestSummoner(name, tag):
 
 # Récupérer les rangs des invocateurs
 def fetchRanks(summonerId):
-    ranks_url = f'https://euw1.api.riotgames.com/lol/league/v4/entries/by-summoner/{summonerId}?api_key={key}'
-    ranks_response = requests.get(ranks_url)
+    try:
+        if not isinstance(summonerId, str) or len(summonerId) < 30:  # Riot IDs are typically longer
+            print(f"Warning: Possibly invalid summoner ID format: {summonerId}")
+            return {}
+        # First try PUUID-based endpoint
+        ranks_url = f'https://euw1.api.riotgames.com/lol/league/v4/entries/by-summoner/{summonerId}?api_key={key}'
+        ranks_response = requests.get(ranks_url)
 
-    if ranks_response.status_code != 200:
-        raise ValueError(f"Erreur lors de la récupération des rangs: {ranks_response.status_code} - {ranks_response.json().get('status', {}).get('message', '')}")
+        if ranks_response.status_code == 400:  # If bad request, summoner ID might be invalid
+            print(f"Warning: Invalid summoner ID format: {summonerId}")
+            return {}
 
-    ranks_data = ranks_response.json()
-    ranks = {}
-    for entry in ranks_data:
-        queue_type = entry['queueType']
-        tier = entry.get('tier', 'Unranked')
-        rank = entry.get('rank', '')
-        wins = entry.get('wins', 0)
-        losses = entry.get('losses', 0)
-        win_rate = round(wins / (wins + losses) * 100, 2) if (wins + losses) > 0 else 0
-        ranks[queue_type] = f"{tier} {rank} - {wins}W/{losses}L ({win_rate}% WR)"
+        if ranks_response.status_code != 200:
+            error_message = ranks_response.json().get('status', {}).get('message', 'Unknown error')
+            print(f"Error fetching ranks: {ranks_response.status_code} - {error_message}")
+            return {}
 
-    return ranks
+        ranks_data = ranks_response.json()
+        ranks = {}
+        for entry in ranks_data:
+            queue_type = entry['queueType']
+            tier = entry.get('tier', 'Unranked')
+            rank = entry.get('rank', '')
+            lp = entry.get('leaguePoints', 0)
+            wins = entry.get('wins', 0)
+            losses = entry.get('losses', 0)
+            win_rate = round(wins / (wins + losses) * 100, 2) if (wins + losses) > 0 else 0
+            ranks[queue_type] = {
+                'display': f"{tier} {rank} ({lp} LP) - {wins}W/{losses}L ({win_rate}% WR)",
+                'tier': tier,
+                'rank': rank,
+                'lp': lp
+            }
+
+        return ranks
+
+    except Exception as e:
+        print(f"Error in fetchRanks: {e}")
+        return {}
+
 
 # Récupérer les meilleures maîtrises d'un invocateur
 def fetchMasteries(puuid, count=1):
@@ -97,7 +119,7 @@ def fetchMasteries(puuid, count=1):
     masteries = []
     for mastery in bestMasteries_data:
         championID = mastery['championId']
-        championIcon = f'https://cdn.communitydragon.org/14.10.1/champion/{championID}/tile'
+        championIcon = f'https://cdn.communitydragon.org/latest/champion/{championID}/tile'
         championName = get_champion_name(championID)
         championLevel = mastery['championLevel']
         championPoints = mastery['championPoints']
@@ -111,7 +133,7 @@ def fetchGameOngoing(puuid):
     try:
         spectatorGame_response = requests.get(spectatorGame_url)
         
-        if spectatorGame_response.status_code == 404:
+        if spectatorGame_response.status_code == 404 or spectatorGame_response.status_code == 429:
             return None, None, None, None, None
         elif spectatorGame_response.status_code != 200:
             print(f"Erreur lors de la récupération des données de la partie pour l'invocateur avec puuid {puuid}: {spectatorGame_response.status_code}")
@@ -133,7 +155,8 @@ def fetchGameOngoing(puuid):
             400: 'Normal',
             490: 'Normal',
             1400: 'Grimoire Ultime',
-            0: 'Perso'
+            0: 'Perso',
+            720: 'Clash ARAM'
         }
         gameMode = game_modes.get(queueId, f'Mode non référencé: {queueId}')
 
@@ -143,7 +166,7 @@ def fetchGameOngoing(puuid):
             if player['puuid'] == puuid:
                 championGameId = player['championId']
                 championName = data_manager.get_champion_name(champion_id=championGameId)
-                championIcon = f'https://cdn.communitydragon.org/14.23/champion/{championGameId}/tile'
+                championIcon = f'https://cdn.communitydragon.org/latest/champion/{championGameId}/tile'
                 riotId = player.get('summonerName', 'UnknownSummoner')
                 return riotId, championName, gameMode, gameId, championIcon
                 
@@ -153,7 +176,7 @@ def fetchGameOngoing(puuid):
 
     return None, None, None, None, None
 
-def fetchGameResult(gameId, puuid, key):
+def fetchGameResult(gameId, puuid):
     match_url = f"https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_{gameId}?api_key={key}"
     match_response = requests.get(match_url)
     if match_response.status_code != 200:
@@ -311,3 +334,59 @@ def fetchRanksTFT(summonerTFTId):
         rankstft[queue_type_tft] = f"{tier_tft} {rank_tft} {league_points_tft} LPs {rated_tier_tft} {rated_rating_tft} - {wins_tft}W/{losses_tft}L ({win_rate_tft}% WR)"
 
     return rankstft
+
+
+
+# Fonction pour récupérer les informations de la partie de TFT en cours
+def fetchGameOngoingTFT(puuid):
+    """
+    Fetch ongoing TFT game information for a given player
+    Args:
+        puuid (str): Player's PUUID
+    Returns:
+        tuple: (summoner_name, tactician_name, game_mode, game_id, tactician_icon) or None if not in game
+    """
+    try:
+        spectator_url = f'https://euw1.api.riotgames.com/tft/spectator/v1/active-games/by-puuid/{puuid}?api_key={key_tft}'
+        spectator_response = requests.get(spectator_url)
+        print(spectator_url)
+        
+        if spectator_response.status_code == 404:
+            print(f"No active TFT game found for PUUID: {puuid}")
+            return None
+        
+        if spectator_response.status_code != 200:
+            error_msg = spectator_response.json().get('status', {}).get('message', 'Unknown error')
+            print(f"Error fetching TFT game data: {spectator_response.status_code} - {error_msg}")
+            return None
+
+        spectator_data = spectator_response.json()
+        
+        # Extract relevant data from the spectator response
+        try:
+            # Find the participant data for our puuid
+            participant = next((p for p in spectator_data.get('participants', []) 
+                             if p.get('puuid') == puuid), None)
+            
+            if not participant:
+                print(f"Player data not found in game for PUUID: {puuid}")
+                return None
+
+            return (
+                participant.get('name', 'Unknown'),  # summoner name
+                spectator_data.get('game_type', 'Unknown'),  # game type/mode
+                spectator_data.get('queue_id'),  # queue ID
+                str(spectator_data.get('game_id')),  # game ID
+                participant.get('companion', {}).get('skin_ID', 0)  # tactician/companion skin ID
+            )
+
+        except Exception as e:
+            print(f"Error processing TFT game data: {e}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"Network error while fetching TFT game data: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error in fetchGameOngoingTFT: {e}")
+        return None
