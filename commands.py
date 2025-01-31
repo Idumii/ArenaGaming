@@ -299,3 +299,111 @@ def setup_commands(client, tree):
                 await interaction.response.send_message("Aucun canal configuré.")
         except Exception as e:
             await interaction.response.send_message(f"Erreur: {e}", ephemeral=True)
+
+    @tree.command(name='testgame', description='Test Specific Player And Game')
+    @app_commands.describe(pseudo='Nom invocateur', tag='EUW', game_id='ID du match')
+    async def testgame(interaction: discord.Interaction, pseudo: str, tag: str, game_id: str):
+        try:
+            await interaction.response.defer()
+
+            items = [
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/3157.png',
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/3089.png',
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/3020.png',
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/3100.png',
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/3135.png',
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/4645.png',
+                'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/3340.png',
+            ]
+
+            # Example rune data structure
+            runes = {
+                'primaryStyle': {
+                    'id': 8200,  # Sorcery
+                    'key': 'Sorcery',
+                    'keystone': {
+                        'id': 8214,  # Aery
+                        'key': 'SummonAery'
+                    }
+                },
+                'secondaryStyle': {
+                    'id': 8100,  # Domination
+                    'key': 'Domination'
+                }
+            }
+
+            embed = discord.Embed(title="Test Game", color=0x00ff00)
+            
+            try:
+                item_size = 32
+                padding = 4
+                separator_width = 8
+                
+                main_items = items[:6]
+                trinket = items[6] if len(items) > 6 else None
+                
+                items_width = (item_size * len(main_items)) + (padding * (len(main_items) - 1))
+                if trinket:
+                    items_width += separator_width + item_size
+
+                # Rune dimensions
+                rune_size = 24
+                rune_padding = 4
+                num_runes = 2  # Primary keystone and secondary style
+                runes_width = (rune_size * num_runes) + (rune_padding * (num_runes - 1))
+
+                total_width = max(items_width, runes_width)
+                total_height = item_size + padding + rune_size
+                
+                combined_image = Image.new('RGBA', (total_width, total_height), (0, 0, 0, 0))
+                
+                # Place items (same as before)
+                # ... [items placement code remains the same]
+
+                    # Place runes below items
+                x_offset = 0
+                y_offset = item_size + padding
+
+                # Primary keystone rune
+                primary_keystone_url = f'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-images/styles/{runes["primaryStyle"]["id"]}/{runes["primaryStyle"]["keystone"]["id"]}.png'
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(primary_keystone_url) as resp:
+                        print(f"Primary keystone status: {resp.status}")
+                        if resp.status == 200:
+                            image_data = await resp.read()
+                            rune_image = Image.open(io.BytesIO(image_data))
+                            rune_image = rune_image.resize((rune_size, rune_size))
+                            combined_image.paste(rune_image, (x_offset, y_offset))
+                            x_offset += rune_size + rune_padding
+
+                # Secondary style
+                secondary_style_url = f'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-images/styles/{runes["secondaryStyle"]["id"]}.png'
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(secondary_style_url) as resp:
+                        print(f"Secondary style status: {resp.status}")
+                        if resp.status == 200:
+                            image_data = await resp.read()
+                            rune_image = Image.open(io.BytesIO(image_data))
+                            rune_image = rune_image.resize((rune_size, rune_size))
+                            combined_image.paste(rune_image, (x_offset, y_offset))
+
+                combined_bytes = io.BytesIO()
+                combined_image.save(combined_bytes, format='PNG')
+                combined_bytes.seek(0)
+                
+                file = discord.File(combined_bytes, filename='build.png')
+                embed.add_field(name="Build", value="", inline=False)
+                embed.set_image(url="attachment://build.png")
+                
+                await interaction.followup.send(files=[file], embed=embed)
+                
+            except Exception as e:
+                print(f"Error creating combined image: {e}")
+                await interaction.followup.send(f"Error creating image: {str(e)}")
+                
+        except Exception as e:
+            print(f"Error in testgame command: {str(e)}")
+            try:
+                await interaction.followup.send(f"An error occurred: {str(e)}")
+            except Exception as follow_up_error:
+                print(f"Error sending follow-up message: {str(follow_up_error)}")

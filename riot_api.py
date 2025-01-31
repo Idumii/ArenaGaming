@@ -6,6 +6,24 @@ from data_manager import DataManager
 
 data_manager = DataManager()
 
+try:
+    with open('items.json', 'r', encoding='utf-8') as f:
+        items_list = json.load(f)
+        # Convert list to dictionary with id as key
+        items_data = {str(item['id']): item for item in items_list if 'id' in item}
+        print(f"Successfully loaded items.json and converted to dictionary with {len(items_data)} items")
+        
+        # Test with a specific item
+        test_item = "3057"
+        if test_item in items_data:
+            print(f"Test item {test_item} found: {items_data[test_item]['name']}")
+        else:
+            print(f"Test item {test_item} not found")
+            
+except Exception as e:
+    print(f"Error loading items.json: {e}")
+    items_data = {}
+
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
 key = os.getenv("API_RIOT_KEY")
@@ -156,7 +174,8 @@ def fetchGameOngoing(puuid):
             490: 'Normal',
             1400: 'Grimoire Ultime',
             0: 'Perso',
-            720: 'Clash ARAM'
+            720: 'Clash ARAM',
+            480: 'Partie Accélérée',
         }
         gameMode = game_modes.get(queueId, f'Mode non référencé: {queueId}')
 
@@ -190,6 +209,7 @@ def fetchGameResult(gameId, puuid):
 
     globalInfo = match_data['info']
     players = globalInfo['participants']
+    teams = globalInfo['teams']
     gameDuration = globalInfo['gameDuration']
     gameMode = globalInfo['gameMode']
 
@@ -223,13 +243,55 @@ def fetchGameResult(gameId, puuid):
             placement = player.get('placement', None)
             playerSubteamId = player.get('playerSubteamId', None)
 
-            # Calculate team objectives
-            teamBaronKills = max(p.get('challenges', {}).get('teamBaronKills', 0) for p in players if p['teamId'] == player['teamId'])
-            teamDragonKills = sum(p['dragonKills'] for p in players if p['teamId'] == player['teamId'])
-            teamRiftHeraldKills = max(p.get('challenges', {}).get('teamRiftHeraldKills', 0) for p in players if p['teamId'] == player['teamId'])
-            teamElderDragonKills = max(p.get('challenges', {}).get('teamElderDragonKills', 0) for p in players if p['teamId'] == player['teamId'])
+            # Get team objectives
+            player_team = next((team for team in teams if team['teamId'] == player['teamId']), None)
+            if player_team:
+                team_objectives = player_team['objectives']
+                team_dragons = team_objectives['dragon']['kills']
+                team_heralds = team_objectives['riftHerald']['kills']
+                team_barons = team_objectives['baron']['kills']
+                team_voidgrubs = team_objectives.get('horde', {}).get('kills', 0)
+                team_atakanhs = team_objectives.get('atakhan', {}).get('kills', 0)
+
+
+            # Get items information
+            items = []
+            print("\n=== Processing items for player ===")
             
-            print(f"Baron: {teamBaronKills}, Dragons: {teamDragonKills}, Herald: {teamRiftHeraldKills}, Elder Dragon: {teamElderDragonKills}")
+            for i in range(0, 7):  # Items slots 0-6 (including trinket)
+                item_id = player[f'item{i}']
+                if item_id and item_id > 0:
+                    item_id_str = str(item_id)
+                    print(f"Debug - Processing item ID: {item_id_str}")  # Debug print
+                    
+                    if item_id_str in items_data:
+                        # Use ddragon URL directly
+                        item_url = f'https://ddragon.leagueoflegends.com/cdn/14.3.1/img/item/{item_id}.png'
+                        print(f"Debug - Created URL: {item_url}")  # Debug print
+                        items.append(item_url)
+                    else:
+                        print(f"Debug - Item {item_id} not found in items_data")
+
+            print("Debug - Final items list:", items)
+
+            # Get perks (runes) information
+            perks = player.get('perks', {})
+            styles = perks.get('styles', [])
+            
+            runes = []
+            if styles:
+                # Primary runes
+                primary_style = styles[0]
+                primary_rune = primary_style.get('selections', [])[0].get('perk') if primary_style.get('selections') else None
+                if primary_rune:
+                    runes.append(primary_rune)
+                
+                # Secondary style
+                if len(styles) > 1:
+                    secondary_style = styles[1].get('style')
+                    if secondary_style:
+                        runes.append(secondary_style)
+
 
             totalTeamDamage = sum(p['totalDamageDealtToChampions'] for p in players if p['teamId'] == player['teamId'])
             damageContributionPercent = round((totalDamages / totalTeamDamage) * 100, 2)
@@ -265,11 +327,11 @@ def fetchGameResult(gameId, puuid):
                     totalDamages, totalDamagesMinutes, pentakills, quadrakills,
                     tripleKills, doubleKills, firstBloodKill, firstTowerKill,
                     formattedGameDuration, gameMode, killParticipationPercent, arenaTeam,
-                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, teamBaronKills, teamDragonKills, teamRiftHeraldKills, teamElderDragonKills)
+                    placement, damageSelfMitigated, damageContributionPercent, damageContributionPercentArena, team_dragons, team_heralds, 
+                    team_barons, team_voidgrubs, team_atakanhs, items, runes)
     
     print(f"Player {puuid} not found in game {gameId}.")
-    return (None, None, None, None, None, None, None, None, None, 
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+    return (None, ) * 30
 
 
 
