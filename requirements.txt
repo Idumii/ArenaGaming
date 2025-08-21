@@ -1,0 +1,22 @@
+# Discord Bot Requirements
+discord.py==2.4.0
+aiohttp==3.11.10
+python-dotenv==1.0.1
+
+# Image processing
+Pillow==11.0.0
+
+# HTTP requests
+requests==2.32.3
+
+# File watching (for config changes)
+watchdog==6.0.0
+
+# Data validation
+pydantic==2.10.2
+
+# Logging
+structlog==24.4.0
+
+# Rate limiting
+ratelimiter==1.2.0

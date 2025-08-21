@@ -1,0 +1,92 @@
+[
+  {
+    "puuid": "2TsR5vwvSEyIh2AtXPFvZVka4YkXiicQZzOZvjiZX1eIWPh7J1TsyRkTWtTYMrxnz8mc3oHfUSscBg",
+    "summoner_name": "Le CupCake",
+    "tag_line": "SPB",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "U9TxBvgORkdvLp0tq6xoU5oaJUB_MSTBrBzJcCMRkIhiCObznmpfrpGfzM9Dw2NL7p-WYPYHEccTWA",
+    "puuid_lol": "U9TxBvgORkdvLp0tq6xoU5oaJUB_MSTBrBzJcCMRkIhiCObznmpfrpGfzM9Dw2NL7p-WYPYHEccTWA",
+    "puuid_tft": "Wo21ORrlPkwiB59yodCZt3ToORVpOKqQtstKftdxF7GO0SkvB2AIGQH-_Mu13zpt5kHKAwmmeHAAyQ",
+    "summoner_name": "Ch Pain Perdu",
+    "tag_line": "EUW",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "VHUaPvggxAG-eCJnnxi6oxgcTYb4nXA0nsUs1aEY8TgrpUjyqxpp4NhQsrrgxrFQPIYPaZ5wLMepjw",
+    "summoner_name": "La OmégaGaufre",
+    "tag_line": "PRAM",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "ieIlNrsf5YCDUiKhinMBl7hQBuDBxcC6xcfzQnHxxqazsYyL7Y3IV-oKOyO2YTaXi6f1gYR-DJDZcA",
+    "summoner_name": "FroFrotte",
+    "tag_line": "IMLVP",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "Ehvdhp7eMsNPvkfJqHHRAh5WLgK6DLIUq73MLbFmYd9YN4R-4UUgkRHl_2nHLzgMWh1FEcxY8_Ti7g",
+    "summoner_name": "SL Silvernights",
+    "tag_line": "EUW",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "OKEbHE7RN6kGlTWEXWW8lxwohIIofGj0V881PwxF_9VVCi_aE97AahUU7AHkOrjMO_mSHTgTIQitKA",
+    "summoner_name": "Silvernaab",
+    "tag_line": "EUW",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "ca0Zzg0f4uMl58CzKiQTZquNDM2pP3yzKoBjWA8NEOkn3Zz-xuF3hW_mbxt0fJRkypMFchl9CVbTUA",
+    "summoner_name": "Dlyuk",
+    "tag_line": "EUW",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  },
+  {
+    "puuid": "h1wYKOMr6ko9cujQwCQUGP_QNuWNOOzUdsWvPlZjswMKI1II4cgL3trTeUy6quKTGq7RTIL1gselWg",
+    "summoner_name": "Adneza",
+    "tag_line": "EUW",
+    "discord_user_id": 177510632000716800,
+    "watch_lol": true,
+    "watch_tft": true,
+    "notify_game_start": true,
+    "notify_game_end": true,
+    "guild_id": 1220706693294325790
+  }
+]
