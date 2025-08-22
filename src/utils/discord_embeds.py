@@ -2,10 +2,51 @@
 Utilitaires pour la gestion des embeds Discord
 """
 import discord
-from typing import List, Optional, Dict, TYPE_CHECKING, Tuple
+from typing import List, Optional, Dict, TYPE_CHECKING, Tuple, Any
 from datetime import datetime
 from ..models.game_models import GameResult, TFTGameResult, Summoner, RankedInfo
 from .item_image_generator import ItemImageGenerator
+
+def _get_tft_queue_name(queue_id: int) -> str:
+    """Convertir l'ID de queue TFT en nom lisible"""
+    queue_names = {
+        1090: "Normal",  # TFT Normal
+        1100: "Classé",  # TFT Ranked
+        1130: "Double UP",  # TFT Double Up
+        1160: "Épreuves de Pic Toc",  # TFT Pic Toc (ou autres épreuves)
+        # Autres IDs possibles selon les mises à jour
+        1091: "Normal (Turbo)",
+        1101: "Classé (Hyper Roll)",
+    }
+    return queue_names.get(queue_id, f"Mode inconnu ({queue_id})")
+
+def _get_placement_emoji(placement: int) -> str:
+    """Obtenir l'emoji correspondant au placement"""
+    emojis = {
+        1: "🥇",  # Or
+        2: "🥈",  # Argent
+        3: "🥉",  # Bronze
+        4: "🎖️",  # Top 4
+        5: "🎯",  # Top 5
+        6: "⚽",  # Top 6
+        7: "💀",  # Bottom 2
+        8: "☠️",  # Dernier
+    }
+    return emojis.get(placement, "🎮")
+
+def _get_companion_info(companion: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Extraire les informations de la petite légende"""
+    if not companion:
+        return None
+    
+    # Exemple de structure companion (peut varier selon l'API)
+    content_id = companion.get('content_ID', '')
+    item_id = companion.get('item_ID', 0)
+    skin_id = companion.get('skin_ID', 0)
+    species = companion.get('species', '')
+    
+    # Vous pouvez créer un mapping des IDs vers les noms si nécessaire
+    return f"Petite légende: {species}" if species else None
 
 if TYPE_CHECKING:
     from ..models.game_models import Participant
@@ -317,8 +358,8 @@ async def create_game_result_embed(game_result: GameResult, target_puuid: str) -
     
     return embed, items_file
 
-def create_tft_result_embed(tft_result: TFTGameResult, target_puuid: str) -> discord.Embed:
-    """Créer un embed pour afficher le résultat d'une partie TFT"""
+def create_tft_result_embed(tft_result: TFTGameResult, target_puuid: str, summoner_info: Optional[Dict[str, str]] = None) -> discord.Embed:
+    """Créer un embed pour afficher le résultat d'une partie TFT avec mode de jeu et pseudo"""
     # Trouver le joueur cible
     target_participant = None
     for participant in tft_result.participants:
@@ -337,38 +378,119 @@ def create_tft_result_embed(tft_result: TFTGameResult, target_puuid: str) -> dis
     else:
         color = discord.Color.red()
     
+    # Emoji selon le placement
+    placement_emoji = _get_placement_emoji(target_participant.placement)
+    
+    # Nom du joueur - utiliser les infos surveillées si disponibles
+    player_name = target_participant.summoner_name
+    if summoner_info:
+        summoner_name = summoner_info.get('summoner_name', target_participant.summoner_name)
+        tag_line = summoner_info.get('tag_line', '')
+        if tag_line:
+            player_name = f"{summoner_name}#{tag_line}"
+        else:
+            player_name = summoner_name
+    
+    # Mode de jeu
+    game_mode = _get_tft_queue_name(tft_result.queue_id)
+    
+    # Titre avec pseudo, mode et placement
+    title = f"🎯 TFT {game_mode} - {placement_emoji} {target_participant.placement}e place"
+    
     embed = discord.Embed(
-        title=f"TFT - {target_participant.placement}e place",
+        title=title,
+        description=f"**{player_name}** a terminé {target_participant.placement}e sur 8 joueurs",
         color=color,
         timestamp=tft_result.match_info.game_creation
     )
     
+    # Informations principales
     embed.add_field(
-        name="Niveau",
-        value=target_participant.level,
+        name="🔼 Niveau",
+        value=f"{target_participant.level}",
         inline=True
     )
     
     embed.add_field(
-        name="Dernier round",
-        value=target_participant.last_round,
+        name="🎯 Dernier round",
+        value=f"Round {target_participant.last_round}",
         inline=True
     )
     
     embed.add_field(
-        name="Dégâts totaux",
+        name="⚔️ Dégâts totaux",
         value=f"{target_participant.total_damage_to_players:,}",
         inline=True
     )
     
-    # Augments
+    # Joueurs éliminés
+    if hasattr(target_participant, 'players_eliminated') and target_participant.players_eliminated > 0:
+        embed.add_field(
+            name="💀 Éliminations",
+            value=f"{target_participant.players_eliminated} joueur(s)",
+            inline=True
+        )
+    
+    # Petite légende si disponible
+    companion_info = _get_companion_info(target_participant.companion)
+    if companion_info:
+        embed.add_field(
+            name="🐣 Petite légende",
+            value=companion_info,
+            inline=True
+        )
+    
+    # Set TFT si disponible
+    if hasattr(tft_result, 'set_number') and tft_result.set_number:
+        embed.add_field(
+            name="📦 Set TFT",
+            value=f"Set {tft_result.set_number}",
+            inline=True
+        )
+    
+    # Augments (limité à 3 principaux)
     if target_participant.augments:
         augments_text = "\n".join([f"• {augment}" for augment in target_participant.augments[:3]])
         embed.add_field(
-            name="Augments",
+            name="⚡ Augments",
             value=augments_text or "Aucun",
             inline=False
         )
+    
+    # Traits principaux (limité à 4-5 plus importants)
+    if target_participant.traits:
+        active_traits = [trait for trait in target_participant.traits if trait.get('tier_current', 0) > 0]
+        active_traits.sort(key=lambda x: x.get('tier_current', 0), reverse=True)
+        
+        if active_traits:
+            traits_text = ""
+            for trait in active_traits[:5]:  # Max 5 traits
+                name = trait.get('name', 'Inconnu')
+                tier = trait.get('tier_current', 0)
+                units = trait.get('num_units', 0)
+                
+                # Emojis selon le tier
+                tier_emoji = {1: "🔹", 2: "🔸", 3: "⭐", 4: "🌟", 5: "✨"}.get(tier, "•")
+                traits_text += f"{tier_emoji} {name} ({units})\n"
+            
+            embed.add_field(
+                name="🎨 Traits actifs",
+                value=traits_text.strip() or "Aucun trait actif",
+                inline=False
+            )
+    
+    # Durée de la partie
+    if hasattr(tft_result.match_info, 'game_duration'):
+        duration_minutes = tft_result.match_info.game_duration // 60
+        duration_seconds = tft_result.match_info.game_duration % 60
+        embed.add_field(
+            name="⏱️ Durée",
+            value=f"{duration_minutes}m {duration_seconds}s",
+            inline=True
+        )
+    
+    # Footer avec informations additionnelles
+    embed.set_footer(text=f"Match ID: {tft_result.match_info.match_id}")
     
     return embed
 

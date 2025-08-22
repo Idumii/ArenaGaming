@@ -1,0 +1,45 @@
+# Virtual environments
+.venv/
+.env/
+venv/
+env/
+
+# Cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Development files
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Temporary files
+temp_old_project/
+*.tmp
+*.log
+logs/
+
+# Local config
+.env
+.env.local
+
+# Documentation
+README.md
+*.md
+
+# Lock files (will be regenerated)
+uv.lock
+
+# Data that shouldn't be in container
+data/guild_configs/
+data/watch_data/
+data/daily_stats/

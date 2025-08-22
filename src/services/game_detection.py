@@ -462,7 +462,12 @@ class GameDetectionService:
                 embed, file = await create_game_result_embed(game_result, lol_puuid)
             else:  # tft
                 tft_puuid = summoner.get_puuid_for_game_type("tft")
-                embed = create_tft_result_embed(game_result, tft_puuid)
+                # Passer les informations du summoner pour un affichage plus riche
+                summoner_info = {
+                    'summoner_name': summoner.summoner_name,
+                    'tag_line': summoner.tag_line
+                }
+                embed = create_tft_result_embed(game_result, tft_puuid, summoner_info)
                 file = None
             
             # Essayer de mentionner l'utilisateur s'il est défini

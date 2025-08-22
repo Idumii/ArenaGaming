@@ -82,7 +82,12 @@ class MatchCommands(commands.Cog):
                     await interaction.followup.send(embed=embed)
                     return
                 
-                embed = create_tft_result_embed(match_details, summoner.puuid)
+                # Pour TFT, passer les informations du summoner
+                summoner_info = {
+                    'summoner_name': summoner.name,
+                    'tag_line': summoner.tag_line
+                }
+                embed = create_tft_result_embed(match_details, summoner.puuid, summoner_info)
                 
             else:  # LoL
                 # Récupérer la dernière partie LoL
